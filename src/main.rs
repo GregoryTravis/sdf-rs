@@ -402,6 +402,8 @@ fn main() {
   let moved_half = Translate::new(Box::new(circle), 0.5, 0.5);
   let ucircle = Translate::new(Box::new(Scale::new(Box::new(circle), 0.5, 0.5)), 1.0, 1.0);
   let ucircle2 = Translate::new(Box::new(Scale::new(Box::new(circle), 0.5, 0.5)), 1.0, 1.0);
+  let ucircle3 = Translate::new(Box::new(Scale::new(Box::new(circle), 0.5, 0.5)), 1.0, 1.0);
+  let ucircle4 = Translate::new(Box::new(Scale::new(Box::new(circle), 0.5, 0.5)), 1.0, 1.0);
   let moved = Translate::new(Box::new(circle), 1.0, 0.0);
   let moved2 = Translate::new(Box::new(circle), 1.0, 0.0);
   let moved3 = Translate::new(Box::new(circle), 1.0, 0.0);
@@ -414,11 +416,16 @@ fn main() {
   let smooth = SmoothUnion::new(Box::new(circle), Box::new(moved5));
   let grid = Grid::new(2.0, 2.0, Box::new(ucircle));
   let grid2 = Scale::new(Box::new(Grid::new(2.0, 2.0, Box::new(ucircle2))), 2.5, 2.5);
-  let gridu = Intersection::new(Box::new(grid), Box::new(grid2));
+  let gridi = Intersection::new(Box::new(grid), Box::new(grid2));
+  let grid3 = Grid::new(2.0, 2.0, Box::new(ucircle3));
+  let grid4 = Scale::new(Box::new(Grid::new(2.0, 2.0, Box::new(ucircle4))), 2.5, 2.5);
+  let gridu = Union::new(Box::new(grid3), Box::new(grid4));
 
-  let start = Instant::now();
+  // let start = Instant::now();
+  render(&gridi, ruler, view, &mut cfb);
+  // eprintln!("elapsed {:?}", start.elapsed()); // note :?
+
   render(&gridu, ruler, view, &mut cfb);
-  eprintln!("elapsed {:?}", start.elapsed()); // note :?
 
   // render(&inter, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&union, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
