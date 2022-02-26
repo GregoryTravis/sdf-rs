@@ -278,7 +278,7 @@ fn band(d: f32) -> Pixel {
 
 // TODO slow
 // Ruler
-const RULE_WIDTH: f32 = 0.2;
+const RULE_WIDTH: f32 = 0.05;
 const SUB_RULE_WIDTH: f32 = 0.1;
 const SUB_RULE_COUNT: f32 = 4.0;
 fn ruler(d: f32) -> Pixel {
