@@ -6,6 +6,7 @@
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufWriter;
+use std::time::Instant;
 
 const BLACK: Pixel = Pixel { r: 0, g: 0, b: 0, a: 255 };
 const BLACKT: Pixel = Pixel { r: 0, g: 0, b: 0, a: 128 };
@@ -414,7 +415,11 @@ fn main() {
   let grid = Grid::new(2.0, 2.0, Box::new(ucircle));
   let grid2 = Scale::new(Box::new(Grid::new(2.0, 2.0, Box::new(ucircle2))), 2.5, 2.5);
   let gridu = Intersection::new(Box::new(grid), Box::new(grid2));
+
+  let start = Instant::now();
   render(&gridu, ruler, view, &mut cfb);
+  eprintln!("elapsed {:?}", start.elapsed()); // note :?
+
   // render(&inter, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&union, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&hmm, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
