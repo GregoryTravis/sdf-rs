@@ -1,0 +1,8 @@
+ffmpeg \
+  -framerate 60 \
+  -pattern_type glob \
+  -i 'image0*.png' \
+  -r 15 \
+  -vf scale=512:-1 \
+  out.gif \
+;

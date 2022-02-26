@@ -396,37 +396,56 @@ fn main() {
   let (w, h) = (800, 800);
   // let (w, h) = (20, 20);
   // let (w, h) = (2, 2);
-  let mut cfb = FB::new(w, h);
+  // let mut cfb = FB::new(w, h);
   let vd = 8.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let circle = Circle {};
   let moved_half = Translate::new(Rc::new(circle), 0.5, 0.5);
   let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(circle), 0.5, 0.5)), 1.0, 1.0));
-  let moved = Translate::new(Rc::new(circle), 1.0, 0.0);
-  let moved2 = Translate::new(Rc::new(circle), 1.0, 0.0);
-  let moved3 = Translate::new(Rc::new(circle), 1.0, 0.0);
-  let moved4 = Translate::new(Rc::new(circle), 1.0, 0.0);
-  let moved5 = Translate::new(Rc::new(circle), 1.0, 0.0);
-  let inter = Intersection::new(Rc::new(circle), Rc::new(moved));
-  let union = Union::new(Rc::new(circle), Rc::new(moved2));
-  let diff = Difference::new(Rc::new(circle), Rc::new(moved4));
-  let hmm = Hmm::new(Rc::new(circle), Rc::new(moved3));
-  let smooth = SmoothUnion::new(Rc::new(circle), Rc::new(moved5));
+  // let moved = Translate::new(Rc::new(circle), 1.0, 0.0);
+  // let moved2 = Translate::new(Rc::new(circle), 1.0, 0.0);
+  // let moved3 = Translate::new(Rc::new(circle), 1.0, 0.0);
+  // let moved4 = Translate::new(Rc::new(circle), 1.0, 0.0);
+  // let moved5 = Translate::new(Rc::new(circle), 1.0, 0.0);
+  // let inter = Intersection::new(Rc::new(circle), Rc::new(moved));
+  // let union = Union::new(Rc::new(circle), Rc::new(moved2));
+  // let diff = Difference::new(Rc::new(circle), Rc::new(moved4));
+  // let hmm = Hmm::new(Rc::new(circle), Rc::new(moved3));
+  // let smooth = SmoothUnion::new(Rc::new(circle), Rc::new(moved5));
   let grid = Rc::new(Grid::new(2.0, 2.0, ucircle.clone()));
   let grid2 = Rc::new(Scale::new(grid.clone(), 2.5, 2.5));
   let gridi = Intersection::new(grid.clone(), grid2.clone());
   let gridu = Translate::new(Rc::new(Union::new(grid.clone(), grid2.clone())), 0.2, 0.2);
 
-  // let start = Instant::now();
-  render(&gridi, ruler, view, &mut cfb);
-  // eprintln!("elapsed {:?}", start.elapsed()); // note :?
-
-  render(&gridu, ruler, view, &mut cfb);
+  // // let start = Instant::now();
+  // render(&gridi, ruler, view, &mut cfb);
+  // // eprintln!("elapsed {:?}", start.elapsed()); // note :?
+  // render(&gridu, ruler, view, &mut cfb);
 
   // render(&inter, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&union, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&hmm, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&diff, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&smooth, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
-  cfb.write("image.png".to_string());
+
+  // cfb.write("image.png".to_string());
+    for x in 0..100 {
+        let mut acfb = FB::new(w, h);
+        let filename = format!("image{:0>10}.png", x);
+        let dt = (x as f32) / 40.0;
+        let (i, u) = wacky(dt);
+        render(&i, ruler, view, &mut acfb);
+        render(&u, ruler, view, &mut acfb);
+        acfb.write(filename);
+    }
+}
+
+fn wacky(t: f32) -> (impl Shape, impl Shape) {
+  let circle = Circle {};
+  let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(circle), 0.5, 0.5)), 1.0, 1.0));
+  let grid = Rc::new(Grid::new(2.0, 2.0, ucircle.clone()));
+  let grid2 = Rc::new(Scale::new(grid.clone(), 2.5, 2.5));
+  let gridi = Intersection::new(grid.clone(), grid2.clone());
+  let gridu = Translate::new(Rc::new(Union::new(grid.clone(), grid2.clone())), 0.2, 0.2 + t);
+  (gridi, gridu)
 }
