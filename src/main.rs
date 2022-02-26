@@ -1,3 +1,7 @@
+// TODO remove these
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 // use std::cmp::min;
 use std::convert::TryInto;
 use std::fs::File;
@@ -272,6 +276,26 @@ fn band(d: f32) -> Pixel {
   if inside { REDT } else { NONE }
 }
 
+// TODO slow
+// Ruler
+const RULE_WIDTH: f32 = 0.2;
+const SUB_RULE_WIDTH: f32 = 0.1;
+const SUB_RULE_COUNT: f32 = 4.0;
+fn ruler(d: f32) -> Pixel {
+  let dist_from_unit = (d - d.floor()).abs();
+  let rule = dist_from_unit < RULE_WIDTH;
+  let dist_from_sub_unit = ((d*SUB_RULE_COUNT) - ((d*SUB_RULE_COUNT).floor())).abs();
+  let sub_rule = dist_from_sub_unit < SUB_RULE_WIDTH;
+  let inside = d < 0.0;
+  if inside {
+    REDT
+  } else if rule || sub_rule {
+    BLACKT
+  } else {
+    NONE
+  }
+}
+
 // fn compose<A, B, C, G, F>(f: F, g: G) -> impl Fn(A) -> C
 // where
 //     F: Fn(A) -> B,
@@ -319,6 +343,8 @@ fn main() {
   let (w, h) = (800, 800);
   // let (w, h) = (20, 20);
   // let (w, h) = (2, 2);
+  let vd = 8.0;
+  let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let circle = Circle {};
   let moved = Translate::new(Box::new(circle), 1.0, 0.0);
   let moved2 = Translate::new(Box::new(circle), 1.0, 0.0);
@@ -331,10 +357,11 @@ fn main() {
   let hmm = Hmm::new(Box::new(circle), Box::new(moved3));
   let smooth = SmoothUnion::new(Box::new(circle), Box::new(moved5));
   let mut cfb = FB::new(w, h);
+  render(&circle, ruler, view, &mut cfb);
   // render(&inter, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&union, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&hmm, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&diff, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
-  render(&smooth, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
+  // render(&smooth, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   cfb.write("image.png".to_string());
 }
