@@ -6,6 +6,7 @@
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufWriter;
+use std::rc::Rc;
 // use std::time::Instant;
 
 const BLACK: Pixel = Pixel { r: 0, g: 0, b: 0, a: 255 };
@@ -103,7 +104,7 @@ impl FB {
     encoder.set_source_chromaticities(source_chromaticities);
     let mut writer = encoder.write_header().unwrap();
 
-    // let arr = Box::new([u8; self.w * self.h * 4]);
+    // let arr = Rc::new([u8; self.w * self.h * 4]);
     let sl: &[u8] = &self.pixels;
   // let a = vec![1, 2, 3, 4, 5];
   //   let b: &[i32] = &a;
@@ -154,13 +155,13 @@ impl Shape for Circle {
 }
 
 pub struct Translate {
-  shape: Box<dyn Shape>,
+  shape: Rc<dyn Shape>,
   tx: f32,
   ty: f32,
 }
 
 impl Translate {
-  pub fn new(shape: Box<dyn Shape>, tx: f32, ty: f32) -> Translate {
+  pub fn new(shape: Rc<dyn Shape>, tx: f32, ty: f32) -> Translate {
     Translate { shape: shape, tx: tx, ty: ty }
   }
 }
@@ -172,13 +173,13 @@ impl Shape for Translate {
 }
 
 pub struct Scale {
-  shape: Box<dyn Shape>,
+  shape: Rc<dyn Shape>,
   sx: f32,
   sy: f32,
 }
 
 impl Scale {
-  pub fn new(shape: Box<dyn Shape>, sx: f32, sy: f32) -> Scale {
+  pub fn new(shape: Rc<dyn Shape>, sx: f32, sy: f32) -> Scale {
     Scale { shape: shape, sx: sx, sy: sy }
   }
 }
@@ -190,12 +191,12 @@ impl Shape for Scale {
 }
 
 pub struct Union {
-  shape0: Box<dyn Shape>,
-  shape1: Box<dyn Shape>,
+  shape0: Rc<dyn Shape>,
+  shape1: Rc<dyn Shape>,
 }
 
 impl Union {
-  pub fn new(shape0: Box<dyn Shape>, shape1: Box<dyn Shape>) -> Union {
+  pub fn new(shape0: Rc<dyn Shape>, shape1: Rc<dyn Shape>) -> Union {
     Union { shape0: shape0, shape1: shape1 }
   }
 }
@@ -207,12 +208,12 @@ impl Shape for Union {
 }
 
 pub struct Intersection {
-  shape0: Box<dyn Shape>,
-  shape1: Box<dyn Shape>,
+  shape0: Rc<dyn Shape>,
+  shape1: Rc<dyn Shape>,
 }
 
 impl Intersection {
-  pub fn new(shape0: Box<dyn Shape>, shape1: Box<dyn Shape>) -> Intersection {
+  pub fn new(shape0: Rc<dyn Shape>, shape1: Rc<dyn Shape>) -> Intersection {
     Intersection { shape0: shape0, shape1: shape1 }
   }
 }
@@ -224,12 +225,12 @@ impl Shape for Intersection {
 }
 
 pub struct Difference {
-  shape0: Box<dyn Shape>,
-  shape1: Box<dyn Shape>,
+  shape0: Rc<dyn Shape>,
+  shape1: Rc<dyn Shape>,
 }
 
 impl Difference {
-  pub fn new(shape0: Box<dyn Shape>, shape1: Box<dyn Shape>) -> Difference {
+  pub fn new(shape0: Rc<dyn Shape>, shape1: Rc<dyn Shape>) -> Difference {
     Difference { shape0: shape0, shape1: shape1 }
   }
 }
@@ -241,12 +242,12 @@ impl Shape for Difference {
 }
 
 pub struct SmoothUnion {
-  shape0: Box<dyn Shape>,
-  shape1: Box<dyn Shape>,
+  shape0: Rc<dyn Shape>,
+  shape1: Rc<dyn Shape>,
 }
 
 impl SmoothUnion {
-  pub fn new(shape0: Box<dyn Shape>, shape1: Box<dyn Shape>) -> SmoothUnion {
+  pub fn new(shape0: Rc<dyn Shape>, shape1: Rc<dyn Shape>) -> SmoothUnion {
     SmoothUnion { shape0: shape0, shape1: shape1 }
   }
 }
@@ -266,12 +267,12 @@ impl Shape for SmoothUnion {
 // }
 
 pub struct Hmm {
-  shape0: Box<dyn Shape>,
-  shape1: Box<dyn Shape>,
+  shape0: Rc<dyn Shape>,
+  shape1: Rc<dyn Shape>,
 }
 
 impl Hmm {
-  pub fn new(shape0: Box<dyn Shape>, shape1: Box<dyn Shape>) -> Hmm {
+  pub fn new(shape0: Rc<dyn Shape>, shape1: Rc<dyn Shape>) -> Hmm {
     Hmm { shape0: shape0, shape1: shape1 }
   }
 }
@@ -285,11 +286,11 @@ impl Shape for Hmm {
 pub struct Grid {
   w: f32,
   h: f32,
-  shape: Box<dyn Shape>,
+  shape: Rc<dyn Shape>,
 }
 
 impl Grid {
-  pub fn new(w: f32, h: f32, shape: Box<dyn Shape>) -> Grid {
+  pub fn new(w: f32, h: f32, shape: Rc<dyn Shape>) -> Grid {
     Grid { w: w, h: h, shape: shape }
   }
 }
@@ -399,27 +400,22 @@ fn main() {
   let vd = 8.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let circle = Circle {};
-  let moved_half = Translate::new(Box::new(circle), 0.5, 0.5);
-  let ucircle = Translate::new(Box::new(Scale::new(Box::new(circle), 0.5, 0.5)), 1.0, 1.0);
-  let ucircle2 = Translate::new(Box::new(Scale::new(Box::new(circle), 0.5, 0.5)), 1.0, 1.0);
-  let ucircle3 = Translate::new(Box::new(Scale::new(Box::new(circle), 0.5, 0.5)), 1.0, 1.0);
-  let ucircle4 = Translate::new(Box::new(Scale::new(Box::new(circle), 0.5, 0.5)), 1.0, 1.0);
-  let moved = Translate::new(Box::new(circle), 1.0, 0.0);
-  let moved2 = Translate::new(Box::new(circle), 1.0, 0.0);
-  let moved3 = Translate::new(Box::new(circle), 1.0, 0.0);
-  let moved4 = Translate::new(Box::new(circle), 1.0, 0.0);
-  let moved5 = Translate::new(Box::new(circle), 1.0, 0.0);
-  let inter = Intersection::new(Box::new(circle), Box::new(moved));
-  let union = Union::new(Box::new(circle), Box::new(moved2));
-  let diff = Difference::new(Box::new(circle), Box::new(moved4));
-  let hmm = Hmm::new(Box::new(circle), Box::new(moved3));
-  let smooth = SmoothUnion::new(Box::new(circle), Box::new(moved5));
-  let grid = Grid::new(2.0, 2.0, Box::new(ucircle));
-  let grid2 = Scale::new(Box::new(Grid::new(2.0, 2.0, Box::new(ucircle2))), 2.5, 2.5);
-  let gridi = Intersection::new(Box::new(grid), Box::new(grid2));
-  let grid3 = Grid::new(2.0, 2.0, Box::new(ucircle3));
-  let grid4 = Scale::new(Box::new(Grid::new(2.0, 2.0, Box::new(ucircle4))), 2.5, 2.5);
-  let gridu = Translate::new(Box::new(Union::new(Box::new(grid3), Box::new(grid4))), 0.2, 0.2);
+  let moved_half = Translate::new(Rc::new(circle), 0.5, 0.5);
+  let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(circle), 0.5, 0.5)), 1.0, 1.0));
+  let moved = Translate::new(Rc::new(circle), 1.0, 0.0);
+  let moved2 = Translate::new(Rc::new(circle), 1.0, 0.0);
+  let moved3 = Translate::new(Rc::new(circle), 1.0, 0.0);
+  let moved4 = Translate::new(Rc::new(circle), 1.0, 0.0);
+  let moved5 = Translate::new(Rc::new(circle), 1.0, 0.0);
+  let inter = Intersection::new(Rc::new(circle), Rc::new(moved));
+  let union = Union::new(Rc::new(circle), Rc::new(moved2));
+  let diff = Difference::new(Rc::new(circle), Rc::new(moved4));
+  let hmm = Hmm::new(Rc::new(circle), Rc::new(moved3));
+  let smooth = SmoothUnion::new(Rc::new(circle), Rc::new(moved5));
+  let grid = Rc::new(Grid::new(2.0, 2.0, ucircle.clone()));
+  let grid2 = Rc::new(Scale::new(grid.clone(), 2.5, 2.5));
+  let gridi = Intersection::new(grid.clone(), grid2.clone());
+  let gridu = Translate::new(Rc::new(Union::new(grid.clone(), grid2.clone())), 0.2, 0.2);
 
   // let start = Instant::now();
   render(&gridi, ruler, view, &mut cfb);
