@@ -6,7 +6,7 @@
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufWriter;
-use std::time::Instant;
+// use std::time::Instant;
 
 const BLACK: Pixel = Pixel { r: 0, g: 0, b: 0, a: 255 };
 const BLACKT: Pixel = Pixel { r: 0, g: 0, b: 0, a: 128 };
@@ -419,7 +419,7 @@ fn main() {
   let gridi = Intersection::new(Box::new(grid), Box::new(grid2));
   let grid3 = Grid::new(2.0, 2.0, Box::new(ucircle3));
   let grid4 = Scale::new(Box::new(Grid::new(2.0, 2.0, Box::new(ucircle4))), 2.5, 2.5);
-  let gridu = Union::new(Box::new(grid3), Box::new(grid4));
+  let gridu = Translate::new(Box::new(Union::new(Box::new(grid3), Box::new(grid4))), 0.2, 0.2);
 
   // let start = Instant::now();
   render(&gridi, ruler, view, &mut cfb);
