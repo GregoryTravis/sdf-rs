@@ -170,6 +170,24 @@ impl Shape for Translate {
   }
 }
 
+pub struct Scale {
+  shape: Box<dyn Shape>,
+  sx: f32,
+  sy: f32,
+}
+
+impl Scale {
+  pub fn new(shape: Box<dyn Shape>, sx: f32, sy: f32) -> Scale {
+    Scale { shape: shape, sx: sx, sy: sy }
+  }
+}
+
+impl Shape for Scale {
+  fn dist(&self, x: f32, y: f32) -> f32 {
+    self.shape.dist(x / self.sx, y / self.sy)
+  }
+}
+
 pub struct Union {
   shape0: Box<dyn Shape>,
   shape1: Box<dyn Shape>,
@@ -263,6 +281,38 @@ impl Shape for Hmm {
   }
 }
 
+pub struct Grid {
+  w: f32,
+  h: f32,
+  shape: Box<dyn Shape>,
+}
+
+impl Grid {
+  pub fn new(w: f32, h: f32, shape: Box<dyn Shape>) -> Grid {
+    Grid { w: w, h: h, shape: shape }
+  }
+}
+
+fn grid_fmod(a: f32, b: f32) -> f32 {
+  let aob = a / b;
+  (aob - aob.floor()) * b
+}
+
+impl Shape for Grid {
+  fn dist(&self, x: f32, y: f32) -> f32 {
+    // let ix = (x / self.w).floor();
+    // let iy = (y / self.h).floor();
+    // println!("FMOD {} {} {}", 0.5 % 0.3, 12.0 % 5.0, -0.5 % 0.3);
+    // println!("FLOOR {} {}", (1.6_f32).floor(), (-1.6_f32).floor());
+    // println!("FMOD {} {} {} {} {} {}", grid_fmod(0.3, 0.3), grid_fmod(0.45, 0.3), grid_fmod(0.6, 0.3), grid_fmod(0.5, 0.3), grid_fmod(12.0, 5.0), grid_fmod(-0.5, 0.3));
+    // let xx = x % self.w;
+    // let yy = y % self.h;
+    let xx = grid_fmod(x, self.w);
+    let yy = grid_fmod(y, self.h);
+    self.shape.dist(xx, yy)
+  }
+}
+
 // Turn a distance into a color
 fn _solid(d: f32) -> Pixel {
   let inside = d > 0.0;
@@ -344,9 +394,12 @@ fn main() {
   let (w, h) = (800, 800);
   // let (w, h) = (20, 20);
   // let (w, h) = (2, 2);
+  let mut cfb = FB::new(w, h);
   let vd = 8.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let circle = Circle {};
+  let moved_half = Translate::new(Box::new(circle), 0.5, 0.5);
+  let ucircle = Translate::new(Box::new(Scale::new(Box::new(circle), 0.5, 0.5)), 1.0, 1.0);
   let moved = Translate::new(Box::new(circle), 1.0, 0.0);
   let moved2 = Translate::new(Box::new(circle), 1.0, 0.0);
   let moved3 = Translate::new(Box::new(circle), 1.0, 0.0);
@@ -357,8 +410,8 @@ fn main() {
   let diff = Difference::new(Box::new(circle), Box::new(moved4));
   let hmm = Hmm::new(Box::new(circle), Box::new(moved3));
   let smooth = SmoothUnion::new(Box::new(circle), Box::new(moved5));
-  let mut cfb = FB::new(w, h);
-  render(&circle, ruler, view, &mut cfb);
+  let grid = Grid::new(2.0, 2.0, Box::new(ucircle));
+  render(&grid, ruler, view, &mut cfb);
   // render(&inter, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&union, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&hmm, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
