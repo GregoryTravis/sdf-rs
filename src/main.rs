@@ -304,7 +304,18 @@ impl Shape for SmoothUnion {
   fn dist(&self, x: f32, y: f32) -> f32 {
     let d0 = self.shape0.dist(x, y);
     let d1 = self.shape1.dist(x, y);
-    length((d0-0.1).min(0.0), (d1-0.1).min(0.0))
+    let r = 0.2;
+    -(length((d0-r).min(0.0), (d1-r).min(0.0)) - r)
+    // -(length((d0-r), (d1-r)) - r)
+    // if d0 >= 0.0 && d0 < 1.0 && d1 >= 0.0 && d1 < 1.0 {
+    //   let k = 0.33;
+    //   let c0 = d0 - (k * (1.0 - d1));
+    //   let c1 = d1 - (k * (1.0 - d0));
+    //   let both = (c0 + c1) / 2.0;
+    //   both
+    // } else {
+    //   d0.min(d1)
+    // }
   }
 }
 
@@ -446,7 +457,7 @@ fn main() {
   // let (w, h) = (20, 20);
   // let (w, h) = (2, 2);
   // let mut cfb = FB::new(w, h);
-  let vd = 8.0;
+  let vd = 4.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let circle = Circle {};
   let moved_half = Translate::new(Rc::new(circle), 0.5, 0.5);
@@ -479,7 +490,7 @@ fn main() {
 
     // cfb.write("image.png".to_string());
     let mut files = Vec::new();
-    let num_frames = 4;
+    let num_frames = 100;
     for x in 0..num_frames {
       let mut acfb = FB::new(w, h);
       let filename = format!("image{:0>10}.png", x);
@@ -528,12 +539,20 @@ fn main() {
     }
 }
 
+fn blend(_t: f32) -> impl Shape {
+  let c = Rc::new(Circle {});
+  let c0 = Translate::new(c.clone(), -0.75, 0.0);
+  let c1 = Translate::new(c.clone(),  0.75, 0.0);
+  let all = SmoothUnion::new(Rc::new(c0), Rc::new(c1));
+  all
+}
+
 fn wacky2(t: f32) -> impl Shape {
     let circle = Circle {};
     let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(circle), 0.5, 0.5)), 1.0, 1.0));
     let grid = Rc::new(Grid::new(2.0, 2.0, ucircle.clone()));
     let grid2 = Rc::new(Scale::new(grid.clone(), 2.5, 2.5));
-    let gridi = Union::new(grid.clone(), Rc::new(Translate::new(grid2.clone(), 0.2, 0.2 + t)));
+    let gridi = SmoothUnion::new(grid.clone(), Rc::new(Translate::new(grid2.clone(), 0.2, 0.2 + t)));
     gridi
 }
 
