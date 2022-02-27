@@ -7,7 +7,7 @@ use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufWriter;
 use std::rc::Rc;
-// use std::time::Instant;
+use std::time::Instant;
 
 const BLACK: Pixel = Pixel { r: 0, g: 0, b: 0, a: 255 };
 const BLACKT: Pixel = Pixel { r: 0, g: 0, b: 0, a: 128 };
@@ -433,11 +433,24 @@ fn main() {
         let mut acfb = FB::new(w, h);
         let filename = format!("image{:0>10}.png", x);
         let dt = (x as f32) / 40.0;
-        let (i, u) = wacky(dt);
-        render(&i, ruler, view, &mut acfb);
-        render(&u, ruler, view, &mut acfb);
+        // let (i, u) = wacky(dt);
+        // render(&i, ruler, view, &mut acfb);
+        // render(&u, ruler, view, &mut acfb);
+        let s = wacky2(dt);
+        let start = Instant::now();
+        render(&s, ruler, view, &mut acfb);
+        eprintln!("elapsed {:?}", start.elapsed()); // note :?
         acfb.write(filename);
     }
+}
+
+fn wacky2(t: f32) -> impl Shape {
+    let circle = Circle {};
+    let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(circle), 0.5, 0.5)), 1.0, 1.0));
+    let grid = Rc::new(Grid::new(2.0, 2.0, ucircle.clone()));
+    let grid2 = Rc::new(Scale::new(grid.clone(), 2.5, 2.5));
+    let gridi = Union::new(grid.clone(), Rc::new(Translate::new(grid2.clone(), 0.2, 0.2 + t)));
+    gridi
 }
 
 fn wacky(t: f32) -> (impl Shape, impl Shape) {

@@ -4,5 +4,7 @@ ffmpeg \
   -i 'image0*.png' \
   -r 15 \
   -vf scale=512:-1 \
-  out.gif \
+  -pix_fmt yuv420p \
+  -vcodec libx264 \
+  out.mov \
 ;
