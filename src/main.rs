@@ -41,9 +41,9 @@ impl Pixel {
   }
 }
 
-// fn avg(a: f32, b: f32) {
-//   (a + b) / 2.0;
-// }
+fn avgf32(a: f32, b: f32) -> f32 {
+  (a + b) / 2.0
+}
 
 fn avg(a: u8, b: u8) -> u8 {
   ((a as f32 + b as f32) / 2.0) as u8
@@ -202,6 +202,17 @@ impl Shape for Circle {
   }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Square {
+}
+
+impl Shape for Square {
+  fn dist(&self, x: f32, y: f32) -> f32 {
+    // -((x.abs() - 1.0).max(y.abs() - 1.0))
+    (x.abs() - 1.0).max(y.abs() - 1.0)
+  }
+}
+
 pub struct Translate {
   shape: Rc<dyn Shape>,
   tx: f32,
@@ -286,6 +297,23 @@ impl Difference {
 impl Shape for Difference {
   fn dist(&self, x: f32, y: f32) -> f32 {
     self.shape0.dist(x, y).max(-self.shape1.dist(x, y))
+  }
+}
+
+pub struct Blend {
+  shape0: Rc<dyn Shape>,
+  shape1: Rc<dyn Shape>,
+}
+
+impl Blend {
+  pub fn new(shape0: Rc<dyn Shape>, shape1: Rc<dyn Shape>) -> Blend {
+    Blend { shape0: shape0, shape1: shape1 }
+  }
+}
+
+impl Shape for Blend {
+  fn dist(&self, x: f32, y: f32) -> f32 {
+    avgf32(self.shape0.dist(x, y), self.shape1.dist(x, y))
   }
 }
 
@@ -542,21 +570,33 @@ fn main() {
     }
 }
 
+fn blah(_t: f32) -> impl Shape {
+  let s = Square{};
+  let c = Circle{};
+  Blend::new(Rc::new(c), Rc::new(s))
+}
+
 fn blend(_t: f32) -> impl Shape {
   let c = Rc::new(Circle {});
-  let c0 = Translate::new(c.clone(), -0.75, 0.0);
-  let c1 = Translate::new(c.clone(),  0.75, 0.0);
+  let s = Rc::new(Square {});
+  let c0 = Translate::new(c.clone(), -0.90, 0.0);
+  let c1 = Translate::new(s.clone(),  0.75, 0.0);
   let all = SmoothUnion::new(Rc::new(c0), Rc::new(c1));
+  // let all = Union::new(Rc::new(c0), Rc::new(c1));
   all
 }
 
 fn wacky2(t: f32) -> impl Shape {
-    let circle = Circle {};
-    let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(circle), 0.5, 0.5)), 1.0, 1.0));
-    let grid = Rc::new(Grid::new(2.0, 2.0, ucircle.clone()));
-    let grid2 = Rc::new(Scale::new(grid.clone(), 2.5, 2.5));
-    let gridi = SmoothUnion::new(Rc::new(Translate::new(grid.clone(), 0.2 + t, 0.2)), Rc::new(Translate::new(grid2.clone(), 0.2, 0.2 + t)));
-    gridi
+  // let circle = Circle {};
+  let s = Square{};
+  let c = Circle{};
+  let sc = Blend::new(Rc::new(c), Rc::new(s));
+
+  let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(sc), 0.5, 0.5)), 1.0, 1.0));
+  let grid = Rc::new(Grid::new(2.0, 2.0, ucircle.clone()));
+  let grid2 = Rc::new(Scale::new(grid.clone(), 2.5, 2.5));
+  let gridi = SmoothUnion::new(Rc::new(Translate::new(grid.clone(), 0.2 + t, 0.2)), Rc::new(Translate::new(grid2.clone(), 0.2, 0.2 + t)));
+  gridi
 }
 
 fn wacky(t: f32) -> (impl Shape, impl Shape) {
