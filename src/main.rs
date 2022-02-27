@@ -2,12 +2,16 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-// use std::cmp::min;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufWriter;
+use std::path::Path;
 use std::rc::Rc;
 use std::time::Instant;
+
+use apng::Encoder;
+use apng::Frame;
+use apng::PNGImage;
 
 const BLACK: Pixel = Pixel { r: 0, g: 0, b: 0, a: 255 };
 const BLACKT: Pixel = Pixel { r: 0, g: 0, b: 0, a: 128 };
@@ -92,7 +96,7 @@ impl FB {
     let mut encoder = png::Encoder::new(w, self.w.try_into().unwrap(), self.h.try_into().unwrap());
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
-    encoder.set_trns(vec!(0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8));
+    // encoder.set_trns(vec!(0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8));
     encoder.set_source_gamma(png::ScaledFloat::from_scaled(45455)); // 1.0 / 2.2, scaled by 100000
     encoder.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));     // 1.0 / 2.2, unscaled, but rounded
     let source_chromaticities = png::SourceChromaticities::new(     // Using unscaled instantiation here
@@ -428,8 +432,10 @@ fn main() {
   // render(&diff, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
   // render(&smooth, band, Rect { ll: Pt { x: -2.0, y: -2.0 }, ur: Pt { x: 2.0, y: 2.0 } }, &mut cfb);
 
-  // cfb.write("image.png".to_string());
-    for x in 0..100 {
+    // cfb.write("image.png".to_string());
+    let mut files = Vec::new();
+    let num_frames = 100;
+    for x in 0..num_frames {
         let mut acfb = FB::new(w, h);
         let filename = format!("image{:0>10}.png", x);
         let dt = (x as f32) / 40.0;
@@ -440,7 +446,39 @@ fn main() {
         let start = Instant::now();
         render(&s, ruler, view, &mut acfb);
         eprintln!("elapsed {:?}", start.elapsed()); // note :?
-        acfb.write(filename);
+        acfb.write(filename.clone());
+        files.push(filename);
+    }
+
+    let mut png_images: Vec<PNGImage> = Vec::new();
+    for f in files.iter() {
+        png_images.push(apng::load_png(f).unwrap());
+    }
+
+    let path = Path::new(r"anim.png");
+    let mut out = BufWriter::new(File::create(path).unwrap());
+
+    let config = apng::create_config(&png_images, None).unwrap();
+    let mut encoder = Encoder::new(&mut out, config).unwrap();
+    let frame = Frame {
+        delay_num: Some(1),
+        delay_den: Some(20),
+        ..Default::default()
+    };
+
+    match encoder.encode_all(png_images, Some(&frame)) {
+        Ok(_n) => println!("success"),
+        Err(err) => eprintln!("{}", err),
+    }
+
+    let clean_up = true;
+    if clean_up {
+        for filename in files {
+            match std::fs::remove_file(filename) {
+                Ok(_n) => (),
+                Err(err) => eprintln!("{}", err),
+            }
+        }
     }
 }
 

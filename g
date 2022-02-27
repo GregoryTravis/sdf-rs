@@ -1,4 +1,5 @@
-rm -f image00*.png out.gif out.mov
+rm -f image00*.png out.gif out.mov anim.png
 cargo run --release
-. make-anim
-open out.mov
+open -a Google\ Chrome anim.png
+# . make-anim
+# open out.mov

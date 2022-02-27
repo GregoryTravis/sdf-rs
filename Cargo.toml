@@ -7,3 +7,4 @@ edition = "2018"
 
 [dependencies]
 png = "0.17.3"
+apng = "0.2.0"
