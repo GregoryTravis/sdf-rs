@@ -334,11 +334,12 @@ fn band(d: f32) -> Pixel {
 
 // TODO slow
 // Ruler
+const RULE_SEP: f32 = 4.0;
 const RULE_WIDTH: f32 = 0.05;
 const SUB_RULE_WIDTH: f32 = 0.1;
 const SUB_RULE_COUNT: f32 = 4.0;
 fn ruler(d: f32) -> Pixel {
-  let dist_from_unit = (d - d.floor()).abs();
+  let dist_from_unit = ((d*RULE_SEP) - (d*RULE_SEP).floor()).abs() / RULE_SEP;
   let rule = dist_from_unit < RULE_WIDTH;
   // let dist_from_sub_unit = ((d*SUB_RULE_COUNT) - ((d*SUB_RULE_COUNT).floor())).abs();
   // let sub_rule = dist_from_sub_unit < SUB_RULE_WIDTH;
