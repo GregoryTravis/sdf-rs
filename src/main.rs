@@ -30,6 +30,25 @@ pub struct Pixel {
   pub a: u8,
 }
 
+impl Pixel {
+  pub fn mix(&self, op: Pixel) -> Pixel{
+    Pixel {
+      r: avg(self.r, op.r),
+      g: avg(self.g, op.g),
+      b: avg(self.b, op.b),
+      a: avg(self.a, op.a),
+    }
+  }
+}
+
+// fn avg(a: f32, b: f32) {
+//   (a + b) / 2.0;
+// }
+
+fn avg(a: u8, b: u8) -> u8 {
+  ((a as f32 + b as f32) / 2.0) as u8
+}
+
 // OVER Pixel { r: 0, g: 0, b: 0, a: 255 } Pixel { r: 0, g: 0, b: 0, a: 255 } Pixel { r: 0, g: 0, b: 0, a: 0 }
 // OVER Pixel { r: 0, g: 0, b: 0, a: 255 } Pixel { r: 0, g: 0, b: 0, a: 255 } Pixel { r: 0, g: 0, b: 0, a: 0 }
 // OVER Pixel { r: 0, g: 0, b: 0, a: 255 } Pixel { r: 0, g: 0, b: 0, a: 255 } Pixel { r: 0, g: 0, b: 0, a: 0 }
@@ -61,6 +80,7 @@ pub struct Rect<T> {
 }
 
 #[allow(unused_variables, dead_code)]
+#[derive(Debug)]
 pub struct FB {
   pub w: usize,
   pub h: usize,
@@ -75,6 +95,11 @@ impl FB {
       pixels: vec![0; w*h*4],
     };
     return fb;
+  }
+
+  pub fn get(&self, x: usize, y: usize) -> Pixel {
+    let off = ((y*self.w) + x) * 4;
+    Pixel { r: self.pixels[off+0], b: self.pixels[off+1], g: self.pixels[off+2], a: self.pixels[off+3] }
   }
 
   pub fn set(&mut self, x: usize, y: usize, pix: &Pixel) {
@@ -125,6 +150,25 @@ impl FB {
   //   self.pixels.try_into()
   //       .unwrap_or_else(|v: Vec<u8>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
   // }
+}
+
+// Doesn't check that dims match
+fn downsample_halve(fb: &FB, ofb: &mut FB) {
+  // let mut ofb = FB::new(fb.w/2, fb.h/2);
+  for x in 0..ofb.w {
+    for y in 0..ofb.h {
+      let ox = x * 2;
+      let oy = y * 2;
+      let combined = fb.get(ox, oy).mix(fb.get(ox+1,oy)).mix(fb.get(ox, oy+1).mix(fb.get(ox+1, oy+1)));
+      ofb.set(x, y, &combined)
+    }
+  }
+}
+
+fn upsample_render(shape: &impl Shape, colorer: fn(f32) -> Pixel, domain: Rect<f32>, fb: &mut FB) {
+  let mut ufb = FB::new(fb.w*2, fb.h*2);
+  render(shape, colorer, domain, &mut ufb);
+  downsample_halve(&ufb, fb);
 }
 
 fn render(shape: &impl Shape, colorer: fn(f32) -> Pixel, domain: Rect<f32>, fb: &mut FB) {
@@ -435,20 +479,21 @@ fn main() {
 
     // cfb.write("image.png".to_string());
     let mut files = Vec::new();
-    let num_frames = 100;
+    let num_frames = 4;
     for x in 0..num_frames {
-        let mut acfb = FB::new(w, h);
-        let filename = format!("image{:0>10}.png", x);
-        let dt = (x as f32) / 40.0;
-        // let (i, u) = wacky(dt);
-        // render(&i, ruler, view, &mut acfb);
-        // render(&u, ruler, view, &mut acfb);
-        let s = wacky2(dt);
-        let start = Instant::now();
-        render(&s, ruler, view, &mut acfb);
-        eprintln!("elapsed {:?}", start.elapsed()); // note :?
-        acfb.write(filename.clone());
-        files.push(filename);
+      let mut acfb = FB::new(w, h);
+      let filename = format!("image{:0>10}.png", x);
+      let dt = (x as f32) / 40.0;
+      // let (i, u) = wacky(dt);
+      // render(&i, ruler, view, &mut acfb);
+      // render(&u, ruler, view, &mut acfb);
+      let s = wacky2(dt);
+      let start = Instant::now();
+      upsample_render(&s, ruler, view, &mut acfb);
+      eprintln!("elapsed {:?}", start.elapsed()); // note :?
+      // eprintln!("fb {:?}", acfb);
+      acfb.write(filename.clone());
+      files.push(filename);
     }
 
     let mut png_images: Vec<PNGImage> = Vec::new();
