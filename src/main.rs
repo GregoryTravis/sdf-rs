@@ -497,6 +497,68 @@ where
   BLACKT.lerp(WHITET, brightness.clamp(0.0, 1.0))
 }
 
+// Like bump_map but just the edges
+// Assumes d <= 0
+const BEVEL_WIDTH: f32 = 0.3;
+fn bevel_dist_to_ht(d: f32) -> f32 {
+  let pi = std::f32::consts::PI;
+  if d < -BEVEL_WIDTH {
+    1.0
+  } else {
+    let sd = d / BEVEL_WIDTH;
+    ((pi/2.0) * (sd+1.0)).cos()
+  }
+}
+fn bevel<S>(shape: &S, cx: f32, cy:f32) -> Pixel
+where
+  S: Shape
+{
+  let cdist = shape.dist(cx, cy);
+
+  if cdist > 0.0 {
+    return NONE;
+  }
+
+  let bit = 0.1;
+  let ax = cx - bit;
+  let ay = cy;
+  let bx = cx - bit;
+  let by = cy - bit;
+
+  let adist = shape.dist(ax, ay);
+  let bdist = shape.dist(bx, by);
+
+  let az = bevel_dist_to_ht(adist);
+  let bz = bevel_dist_to_ht(bdist);
+  let cz = bevel_dist_to_ht(cdist);
+
+  let a = Point3::new(ax, ay, az);
+  let b = Point3::new(bx, by, bz);
+  let c = Point3::new(cx, cy, cz);
+
+  let ac: Vector3<f32> = a - c;
+  let bc: Vector3<f32> = b - c;
+
+  let norm = ac.cross(&bc).normalize();
+
+  let light = Vector3::new(-1.0, 1.0, 1.0).normalize();
+
+  let brightness = norm.dot(&light);
+
+  // println!("BUMP");
+  // println!("cx cy {} {}", cx, cy);
+  // println!("dists {} {} {}", adist, bdist, cdist);
+  // println!("{}", a);
+  // println!("{}", b);
+  // println!("{}", c);
+  // println!("{}", ac);
+  // println!("{}", bc);
+  // println!("{}", ac.cross(&bc));
+  // println!("norm {} light {} brightness {}", norm, light, brightness);
+
+  BLACKT.lerp(WHITET, brightness.clamp(0.0, 1.0))
+}
+
 // TODO slow
 // Ruler
 const RULE_SEP: f32 = 4.0;
@@ -573,7 +635,7 @@ fn main() {
   // let (w, h) = (2, 2);
   // let (w, h) = (4, 4);
   // let mut cfb = FB::new(w, h);
-  let vd = 8.0;
+  let vd = 1.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let circle = Circle {};
   let moved_half = Translate::new(Rc::new(circle), 0.5, 0.5);
@@ -606,7 +668,7 @@ fn main() {
 
     // cfb.write("image.png".to_string());
     let mut files = Vec::new();
-    let num_frames = 1000;
+    let num_frames = 1;
     for x in 0..num_frames {
       let mut acfb = FB::new(w, h);
       let filename = format!("image{:0>10}.png", x);
@@ -614,11 +676,11 @@ fn main() {
       // let (i, u) = wacky(dt);
       // render(&i, ruler, view, &mut acfb);
       // render(&u, ruler, view, &mut acfb);
-      let s = wacky2(dt);
+      let s = just_circle(dt);
       // let s = cgrid_circle(dt);
       let start = Instant::now();
       // upsample_render(&s, ruler, view, &mut acfb);
-      upsample_render(&s, bump_map, view, &mut acfb);
+      render(&s, bevel, view, &mut acfb);
       eprintln!("elapsed {:?}", start.elapsed()); // note :?
       // eprintln!("fb {:?}", acfb);
       acfb.write(filename.clone());
