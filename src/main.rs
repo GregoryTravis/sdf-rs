@@ -2,6 +2,8 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+extern crate nalgebra as na;
+
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::BufWriter;
@@ -12,9 +14,11 @@ use std::time::Instant;
 use apng::Encoder;
 use apng::Frame;
 use apng::PNGImage;
+use na::{Point3, Vector3};
 
 const BLACK: Pixel = Pixel { r: 0, g: 0, b: 0, a: 255 };
 const BLACKT: Pixel = Pixel { r: 0, g: 0, b: 0, a: 128 };
+const WHITET: Pixel = Pixel { r: 255, g: 255, b: 255, a: 128 };
 const NONE: Pixel = Pixel { r: 0, g: 0, b: 0, a: 0 };
 const REDT: Pixel = Pixel { r: 255, g: 0, b: 0, a: 128 };
 
@@ -37,6 +41,15 @@ impl Pixel {
       g: avg(self.g, op.g),
       b: avg(self.b, op.b),
       a: avg(self.a, op.a),
+    }
+  }
+
+  pub fn lerp(&self, p: Pixel, a: f32) -> Pixel {
+    Pixel {
+      r: ((self.r as f32 * (1.0 - a)) + (p.r as f32 * a)) as u8,
+      g: ((self.g as f32 * (1.0 - a)) + (p.g as f32 * a)) as u8,
+      b: ((self.b as f32 * (1.0 - a)) + (p.b as f32 * a)) as u8,
+      a: ((self.a as f32 * (1.0 - a)) + (p.a as f32 * a)) as u8,
     }
   }
 }
@@ -165,13 +178,20 @@ fn downsample_halve(fb: &FB, ofb: &mut FB) {
   }
 }
 
-fn upsample_render(shape: &impl Shape, colorer: fn(f32) -> Pixel, domain: Rect<f32>, fb: &mut FB) {
+fn upsample_render<S>(shape: &S,
+                      colorer: fn(shape: &S, x: f32, y:f32) -> Pixel, domain: Rect<f32>, fb: &mut FB)
+where
+  S: Shape
+{
   let mut ufb = FB::new(fb.w*2, fb.h*2);
   render(shape, colorer, domain, &mut ufb);
   downsample_halve(&ufb, fb);
 }
 
-fn render(shape: &impl Shape, colorer: fn(f32) -> Pixel, domain: Rect<f32>, fb: &mut FB) {
+fn render<S>(shape: &S, colorer: fn(shape: &S, x: f32, y:f32) -> Pixel, domain: Rect<f32>, fb: &mut FB)
+where
+  S: Shape
+{
   let ox = domain.ll.x;
   let oy = domain.ll.y;
   let dx = (domain.ur.x - domain.ll.x) / (fb.w as f32);
@@ -180,7 +200,7 @@ fn render(shape: &impl Shape, colorer: fn(f32) -> Pixel, domain: Rect<f32>, fb: 
     for y in 0..fb.h {
       let fx = ox + ((x as f32) * dx);
       let fy = oy + ((y as f32) * dy);
-      fb.set(x, y, &colorer(shape.dist(fx, fy)));
+      fb.set(x, y, &colorer(shape, fx, fy));
     }
   }
 }
@@ -418,13 +438,76 @@ fn band(d: f32) -> Pixel {
   if inside { REDT } else { NONE }
 }
 
+// c: point to color
+// ac, bc: tangent vectors
+// normal is ac x bc
+// a <- c
+//     /
+//    /
+//   L
+// b
+fn bump_map<S>(shape: &S, cx: f32, cy:f32) -> Pixel
+where
+  S: Shape
+{
+  let cdist = shape.dist(cx, cy);
+
+  if cdist > 0.0 {
+    return NONE;
+  }
+
+  let pi =  std::f32::consts::PI;
+  let bit = 0.1;
+  let ax = cx - bit;
+  let ay = cy;
+  let bx = cx - bit;
+  let by = cy - bit;
+
+  let adist = shape.dist(ax, ay);
+  let bdist = shape.dist(bx, by);
+
+  let az = ((pi/2.0) * (adist+1.0)).cos();
+  let bz = ((pi/2.0) * (bdist+1.0)).cos();
+  let cz = ((pi/2.0) * (cdist+1.0)).cos();
+
+  let a = Point3::new(ax, ay, az);
+  let b = Point3::new(bx, by, bz);
+  let c = Point3::new(cx, cy, cz);
+
+  let ac: Vector3<f32> = a - c;
+  let bc: Vector3<f32> = b - c;
+
+  let norm = ac.cross(&bc).normalize();
+
+  let light = Vector3::new(-1.0, 1.0, 1.0).normalize();
+
+  let brightness = norm.dot(&light);
+
+  // println!("BUMP");
+  // println!("cx cy {} {}", cx, cy);
+  // println!("dists {} {} {}", adist, bdist, cdist);
+  // println!("{}", a);
+  // println!("{}", b);
+  // println!("{}", c);
+  // println!("{}", ac);
+  // println!("{}", bc);
+  // println!("{}", ac.cross(&bc));
+  // println!("norm {} light {} brightness {}", norm, light, brightness);
+
+  BLACKT.lerp(WHITET, brightness.clamp(0.0, 1.0))
+}
+
 // TODO slow
 // Ruler
 const RULE_SEP: f32 = 4.0;
 const RULE_WIDTH: f32 = 0.05;
 const SUB_RULE_WIDTH: f32 = 0.1;
 const SUB_RULE_COUNT: f32 = 4.0;
-fn ruler(d: f32) -> Pixel {
+fn ruler<S>(shape: &S, x: f32, y:f32) -> Pixel
+where
+  S: Shape
+{
+  let d = shape.dist(x, y);
   let dist_from_unit = ((d*RULE_SEP) - (d*RULE_SEP).floor()).abs() / RULE_SEP;
   let rule = dist_from_unit < RULE_WIDTH;
   // let dist_from_sub_unit = ((d*SUB_RULE_COUNT) - ((d*SUB_RULE_COUNT).floor())).abs();
@@ -459,6 +542,7 @@ fn main() {
   // encoder.set_depth(png::BitDepth::Eight);
   // encoder.set_trns(vec!(0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8));
   // encoder.set_source_gamma(png::ScaledFloat::from_scaled(45455)); // 1.0 / 2.2, scaled by 100000
+
   // encoder.set_source_gamma(png::ScaledFloat::new(1.0 / 2.2));     // 1.0 / 2.2, unscaled, but rounded
   // let source_chromaticities = png::SourceChromaticities::new(     // Using unscaled instantiation here
   //     (0.31270, 0.32900),
@@ -487,8 +571,9 @@ fn main() {
   let (w, h) = (800, 800);
   // let (w, h) = (20, 20);
   // let (w, h) = (2, 2);
+  // let (w, h) = (4, 4);
   // let mut cfb = FB::new(w, h);
-  let vd = 4.0;
+  let vd = 8.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let circle = Circle {};
   let moved_half = Translate::new(Rc::new(circle), 0.5, 0.5);
@@ -521,7 +606,7 @@ fn main() {
 
     // cfb.write("image.png".to_string());
     let mut files = Vec::new();
-    let num_frames = 100;
+    let num_frames = 1000;
     for x in 0..num_frames {
       let mut acfb = FB::new(w, h);
       let filename = format!("image{:0>10}.png", x);
@@ -530,8 +615,10 @@ fn main() {
       // render(&i, ruler, view, &mut acfb);
       // render(&u, ruler, view, &mut acfb);
       let s = wacky2(dt);
+      // let s = cgrid_circle(dt);
       let start = Instant::now();
-      upsample_render(&s, ruler, view, &mut acfb);
+      // upsample_render(&s, ruler, view, &mut acfb);
+      upsample_render(&s, bump_map, view, &mut acfb);
       eprintln!("elapsed {:?}", start.elapsed()); // note :?
       // eprintln!("fb {:?}", acfb);
       acfb.write(filename.clone());
@@ -568,6 +655,17 @@ fn main() {
             }
         }
     }
+}
+
+fn just_circle(_t: f32) -> impl Shape {
+  Circle {}
+}
+
+fn cgrid_circle(_t: f32) -> impl Shape {
+  let sc = Circle {};
+  let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(sc), 0.5, 0.5)), 1.0, 1.0));
+  let grid = Grid::new(2.0, 2.0, ucircle.clone());
+  grid
 }
 
 fn blah(_t: f32) -> impl Shape {
