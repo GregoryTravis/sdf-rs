@@ -18,6 +18,10 @@ use na::{Point3, Vector3};
 
 const BLACK: Pixel = Pixel { r: 0, g: 0, b: 0, a: 255 };
 const BLACKT: Pixel = Pixel { r: 0, g: 0, b: 0, a: 128 };
+const DGRAY: Pixel = Pixel { r: 64, g: 64, b: 64, a: 255 };
+const GRAY: Pixel = Pixel { r: 128, g: 128, b: 128, a: 255 };
+const LGRAY: Pixel = Pixel { r: 192, g: 192, b: 192, a: 255 };
+const WHITE: Pixel = Pixel { r: 255, g: 255, b: 255, a: 255 };
 const WHITET: Pixel = Pixel { r: 255, g: 255, b: 255, a: 128 };
 const NONE: Pixel = Pixel { r: 0, g: 0, b: 0, a: 0 };
 const REDT: Pixel = Pixel { r: 255, g: 0, b: 0, a: 128 };
@@ -499,7 +503,7 @@ where
 
 // Like bump_map but just the edges
 // Assumes d <= 0
-const BEVEL_WIDTH: f32 = 0.3;
+const BEVEL_WIDTH: f32 = 0.075;
 fn bevel_dist_to_ht(d: f32) -> f32 {
   let pi = std::f32::consts::PI;
   if d < -BEVEL_WIDTH {
@@ -509,37 +513,48 @@ fn bevel_dist_to_ht(d: f32) -> f32 {
     ((pi/2.0) * (sd+1.0)).cos()
   }
 }
-fn bevel<S>(shape: &S, cx: f32, cy:f32) -> Pixel
+//   c
+// a-+-b
+//   d
+fn bevel<S>(shape: &S, x: f32, y:f32) -> Pixel
 where
   S: Shape
 {
-  let cdist = shape.dist(cx, cy);
+  let dist = shape.dist(x, y);
 
-  if cdist > 0.0 {
+  if dist > 0.0 {
     return NONE;
   }
 
-  let bit = 0.1;
-  let ax = cx - bit;
-  let ay = cy;
-  let bx = cx - bit;
-  let by = cy - bit;
+  let bit = 0.005;
+  let ax = x - bit;
+  let ay = y;
+  let bx = x + bit;
+  let by = y;
+  let cx = x;
+  let cy = y - bit;
+  let dx = x;
+  let dy = y + bit;
 
   let adist = shape.dist(ax, ay);
   let bdist = shape.dist(bx, by);
+  let cdist = shape.dist(cx, cy);
+  let ddist = shape.dist(dx, dy);
 
   let az = bevel_dist_to_ht(adist);
   let bz = bevel_dist_to_ht(bdist);
   let cz = bevel_dist_to_ht(cdist);
+  let dz = bevel_dist_to_ht(ddist);
 
   let a = Point3::new(ax, ay, az);
   let b = Point3::new(bx, by, bz);
   let c = Point3::new(cx, cy, cz);
+  let d = Point3::new(dx, dy, dz);
 
-  let ac: Vector3<f32> = a - c;
-  let bc: Vector3<f32> = b - c;
+  let ba: Vector3<f32> = b - a;
+  let cd: Vector3<f32> = c - d;
 
-  let norm = ac.cross(&bc).normalize();
+  let norm = cd.cross(&ba).normalize();
 
   let light = Vector3::new(-1.0, 1.0, 1.0).normalize();
 
@@ -556,7 +571,7 @@ where
   // println!("{}", ac.cross(&bc));
   // println!("norm {} light {} brightness {}", norm, light, brightness);
 
-  BLACKT.lerp(WHITET, brightness.clamp(0.0, 1.0))
+  GRAY.lerp(WHITE, brightness.clamp(0.0, 1.0))
 }
 
 // TODO slow
@@ -635,7 +650,7 @@ fn main() {
   // let (w, h) = (2, 2);
   // let (w, h) = (4, 4);
   // let mut cfb = FB::new(w, h);
-  let vd = 1.0;
+  let vd = 4.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let circle = Circle {};
   let moved_half = Translate::new(Rc::new(circle), 0.5, 0.5);
@@ -668,7 +683,7 @@ fn main() {
 
     // cfb.write("image.png".to_string());
     let mut files = Vec::new();
-    let num_frames = 1;
+    let num_frames = 10;
     for x in 0..num_frames {
       let mut acfb = FB::new(w, h);
       let filename = format!("image{:0>10}.png", x);
@@ -676,11 +691,11 @@ fn main() {
       // let (i, u) = wacky(dt);
       // render(&i, ruler, view, &mut acfb);
       // render(&u, ruler, view, &mut acfb);
-      let s = just_circle(dt);
+      let s = wacky2(dt);
       // let s = cgrid_circle(dt);
       let start = Instant::now();
       // upsample_render(&s, ruler, view, &mut acfb);
-      render(&s, bevel, view, &mut acfb);
+      upsample_render(&s, bevel, view, &mut acfb);
       eprintln!("elapsed {:?}", start.elapsed()); // note :?
       // eprintln!("fb {:?}", acfb);
       acfb.write(filename.clone());
