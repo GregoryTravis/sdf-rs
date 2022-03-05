@@ -93,7 +93,7 @@ pub struct Rect<T> {
 pub struct FB {
   pub w: usize,
   pub h: usize,
-  pixels: Vec<f32>,
+  pixels: Vec<Pixel>,
 }
 
 impl FB {
@@ -101,28 +101,23 @@ impl FB {
     let fb = FB {
       w: w,
       h: h,
-      pixels: vec![0.0; w*h*4],
+      pixels: vec![NONE; w*h],
     };
     return fb;
   }
 
   pub fn get(&self, x: usize, y: usize) -> Pixel {
-    let off = ((y*self.w) + x) * 4;
-    Pixel { r: self.pixels[off+0], b: self.pixels[off+1], g: self.pixels[off+2], a: self.pixels[off+3] }
+    let off = (y*self.w) + x;
+    self.pixels[off]
   }
 
   pub fn set(&mut self, x: usize, y: usize, pix: &Pixel) {
-    let off = ((y*self.w) + x) * 4;
-    self.pixels[off+0] = pix.r;
-    self.pixels[off+1] = pix.g;
-    self.pixels[off+2] = pix.b;
-    self.pixels[off+3] = pix.a;
+    let off = (y*self.w) + x;
+    self.pixels[off] = *pix;
   }
 
   pub fn blend_into(&mut self, x: usize, y: usize, pix: &Pixel) {
-    let off = ((y*self.w) + x) * 4;
-    // TODO unnecessary copy
-    let current = Pixel { r: self.pixels[off+0], b: self.pixels[off+1], g: self.pixels[off+2], a: self.pixels[off+3] };
+    let current = self.get(x, y);
     let over = over(&pix, &current);
     self.set(x, y, &over);
   }
@@ -147,10 +142,12 @@ impl FB {
     encoder.set_source_chromaticities(source_chromaticities);
     let mut writer = encoder.write_header().unwrap();
 
-    let mut image_data = Vec::with_capacity(self.w * self.h);
+    let mut image_data = Vec::with_capacity(self.w * self.h * 4);
     for (i, x) in self.pixels.iter().enumerate() {
-      image_data.push(*x as u8);
-      // image_data[i] = *x as u8;
+      image_data.push((*x).r as u8);
+      image_data.push((*x).g as u8);
+      image_data.push((*x).b as u8);
+      image_data.push((*x).a as u8);
     }
     let sl: &[u8] = &image_data;
     writer.write_image_data(sl).unwrap(); // Save
