@@ -24,6 +24,8 @@ const WHITE: Pixel = Pixel { r: 255.0, g: 255.0, b: 255.0, a: 255.0 };
 const RED: Pixel = Pixel { r: 255.0, g: 0.0, b: 0.0, a: 255.0 };
 const NONE: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
 
+const UPSAMPLE_RENDER: bool = false;
+
 pub fn length(a: f32, b: f32) -> f32 {
   (a*a + b*b).sqrt()
 }
@@ -519,17 +521,29 @@ fn main() {
   let (w, h) = (800, 800);
   let vd = 4.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
+  let num_frames = 10;
 
+  render_animation_to(w, h, view, num_frames, wacky2, bevel, r"anim.png");
+}
+
+fn render_animation_to<S>(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
+                          sf: fn(f32) -> S, colorer: fn(shape: &S, x: f32, y:f32) -> Pixel, ofile: &str)
+where
+  S: Shape
+{
   // cfb.write("image.png".to_string());
   let mut files = Vec::new();
-  let num_frames = 10;
   for x in 0..num_frames {
     let mut acfb = FB::new(w, h);
     let filename = format!("image{:0>10}.png", x);
     let dt = (x as f32) / 40.0;
-    let s = wacky2(dt);
+    let s = sf(dt);
     let start = Instant::now();
-    upsample_render(&s, bevel, view, &mut acfb);
+    if UPSAMPLE_RENDER {
+      upsample_render(&s, colorer, view, &mut acfb);
+    } else {
+      render(&s, colorer, view, &mut acfb);
+    }
     eprintln!("elapsed {:?}", start.elapsed()); // note :?
     acfb.write(filename.clone());
     files.push(filename);
