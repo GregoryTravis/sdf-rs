@@ -14,7 +14,7 @@ use std::time::Instant;
 use apng::Encoder;
 use apng::Frame;
 use apng::PNGImage;
-use na::{Point3, Vector3};
+use na::{Point3, Vector3, Vector2};
 
 const BLACK: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 255.0 };
 const DGRAY: Pixel = Pixel { r: 64.0, g: 64.0, b: 64.0, a: 255.0 };
@@ -369,6 +369,27 @@ impl Shape for Hmm {
   }
 }
 
+pub struct Rotation {
+  shape: Rc<dyn Shape>,
+  bx: Vector2<f32>,
+  by: Vector2<f32>,
+}
+
+impl Rotation {
+  pub fn new(shape: Rc<dyn Shape>, ang: f32) -> Rotation {
+    let bx = Vector2::new(ang.cos(), ang.sin());
+    let by = Vector2::new(-ang.sin(), ang.cos());
+    Rotation { shape: shape, bx: bx, by: by }
+  }
+}
+
+impl Shape for Rotation {
+  fn dist(&self, x: f32, y: f32) -> f32 {
+    let rv = x * self.bx + y * self.by;
+    self.shape.dist(rv.x, rv.y)
+  }
+}
+
 pub struct Grid {
   w: f32,
   h: f32,
@@ -523,7 +544,7 @@ fn main() {
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let num_frames = 10;
 
-  render_animation_to(w, h, view, num_frames, wacky2, bevel, r"anim.png");
+  render_animation_to(w, h, view, num_frames, wacky3, bevel, r"anim.png");
 }
 
 fn render_animation_to<S>(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
@@ -587,6 +608,19 @@ fn blend(_t: f32) -> impl Shape {
   let all = SmoothUnion::new(Rc::new(c0), Rc::new(c1));
   // let all = Union::new(Rc::new(c0), Rc::new(c1));
   all
+}
+
+fn wacky3(t: f32) -> impl Shape {
+  // let circle = Circle {};
+  let s = Square{};
+  let c = Circle{};
+  let sc = Blend::new(Rc::new(c), Rc::new(s));
+
+  let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(sc), 0.5, 0.5)), 1.0, 1.0));
+  let grid = Rc::new(Grid::new(2.0, 2.0, ucircle.clone()));
+  let grid2 = Rc::new(Scale::new(grid.clone(), 2.5, 2.5));
+  let gridi = SmoothUnion::new(Rc::new(Rotation::new(Rc::new(Translate::new(grid.clone(), 0.2 + t, 0.2)), t)), Rc::new(Translate::new(grid2.clone(), 0.2, 0.2 + t)));
+  gridi
 }
 
 fn wacky2(t: f32) -> impl Shape {
