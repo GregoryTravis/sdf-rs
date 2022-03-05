@@ -426,7 +426,7 @@ where
   let dist = shape.dist(x, y);
 
   if dist > 0.0 {
-    return NONE;
+    return BLACK;
   }
 
   let bit = 0.005;
