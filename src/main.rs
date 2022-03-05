@@ -491,6 +491,29 @@ where
   }
 }
 
+fn compile_animation(files: &Vec<String>, ofile: &str) {
+  let mut png_images: Vec<PNGImage> = Vec::new();
+  for f in files.iter() {
+    png_images.push(apng::load_png(f).unwrap());
+  }
+
+  let path = Path::new(ofile);
+  let mut out = BufWriter::new(File::create(path).unwrap());
+
+  let config = apng::create_config(&png_images, None).unwrap();
+  let mut encoder = Encoder::new(&mut out, config).unwrap();
+  let frame = Frame {
+    delay_num: Some(1),
+    delay_den: Some(20),
+    ..Default::default()
+  };
+
+  match encoder.encode_all(png_images, Some(&frame)) {
+    Ok(_n) => println!("success"),
+    Err(err) => eprintln!("{}", err),
+  }
+}
+
 fn main() {
     println!("Hello, world!");
   let (w, h) = (800, 800);
@@ -512,26 +535,7 @@ fn main() {
     files.push(filename);
   }
 
-  let mut png_images: Vec<PNGImage> = Vec::new();
-  for f in files.iter() {
-      png_images.push(apng::load_png(f).unwrap());
-  }
-
-  let path = Path::new(r"anim.png");
-  let mut out = BufWriter::new(File::create(path).unwrap());
-
-  let config = apng::create_config(&png_images, None).unwrap();
-  let mut encoder = Encoder::new(&mut out, config).unwrap();
-  let frame = Frame {
-      delay_num: Some(1),
-      delay_den: Some(20),
-      ..Default::default()
-  };
-
-  match encoder.encode_all(png_images, Some(&frame)) {
-      Ok(_n) => println!("success"),
-      Err(err) => eprintln!("{}", err),
-  }
+  compile_animation(&files, r"anim.png");
 
   let clean_up = true;
   if clean_up {
