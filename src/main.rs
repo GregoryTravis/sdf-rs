@@ -16,13 +16,13 @@ use apng::Frame;
 use apng::PNGImage;
 use na::{Point3, Vector3};
 
-const BLACK: Pixel = Pixel { r: 0, g: 0, b: 0, a: 255 };
-const DGRAY: Pixel = Pixel { r: 64, g: 64, b: 64, a: 255 };
-const GRAY: Pixel = Pixel { r: 128, g: 128, b: 128, a: 255 };
-const LGRAY: Pixel = Pixel { r: 192, g: 192, b: 192, a: 255 };
-const WHITE: Pixel = Pixel { r: 255, g: 255, b: 255, a: 255 };
-const RED: Pixel = Pixel { r: 255, g: 0, b: 0, a: 255 };
-const NONE: Pixel = Pixel { r: 0, g: 0, b: 0, a: 0 };
+const BLACK: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 255.0 };
+const DGRAY: Pixel = Pixel { r: 64.0, g: 64.0, b: 64.0, a: 255.0 };
+const GRAY: Pixel = Pixel { r: 128.0, g: 128.0, b: 128.0, a: 255.0 };
+const LGRAY: Pixel = Pixel { r: 192.0, g: 192.0, b: 192.0, a: 255.0 };
+const WHITE: Pixel = Pixel { r: 255.0, g: 255.0, b: 255.0, a: 255.0 };
+const RED: Pixel = Pixel { r: 255.0, g: 0.0, b: 0.0, a: 255.0 };
+const NONE: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
 
 pub fn length(a: f32, b: f32) -> f32 {
   (a*a + b*b).sqrt()
@@ -30,10 +30,10 @@ pub fn length(a: f32, b: f32) -> f32 {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Pixel {
-  pub r: u8,
-  pub g: u8,
-  pub b: u8,
-  pub a: u8,
+  pub r: f32,
+  pub g: f32,
+  pub b: f32,
+  pub a: f32,
 }
 
 impl Pixel {
@@ -48,29 +48,29 @@ impl Pixel {
 
   pub fn lerp(&self, p: Pixel, a: f32) -> Pixel {
     Pixel {
-      r: ((self.r as f32 * (1.0 - a)) + (p.r as f32 * a)) as u8,
-      g: ((self.g as f32 * (1.0 - a)) + (p.g as f32 * a)) as u8,
-      b: ((self.b as f32 * (1.0 - a)) + (p.b as f32 * a)) as u8,
-      a: ((self.a as f32 * (1.0 - a)) + (p.a as f32 * a)) as u8,
+      r: (self.r * (1.0 - a)) + (p.r * a),
+      g: (self.g * (1.0 - a)) + (p.g * a),
+      b: (self.b * (1.0 - a)) + (p.b * a),
+      a: (self.a * (1.0 - a)) + (p.a * a),
     }
   }
 }
 
-fn avgf32(a: f32, b: f32) -> f32 {
+fn avg(a: f32, b: f32) -> f32 {
   (a + b) / 2.0
 }
 
-fn avg(a: u8, b: u8) -> u8 {
-  ((a as f32 + b as f32) / 2.0) as u8
-}
+// fn avg(a: u8, b: u8) -> u8 {
+//   ((a as f32 + b as f32) / 2.0) as u8
+// }
 
 pub fn over(a: &Pixel, b: &Pixel) -> Pixel {
-  let ao = (a.a as f32 + (b.a as f32 * (255.0 - a.a as f32))).clamp(0.0, 255.0);
+  let ao = (a.a + (b.a * (255.0 - a.a))).clamp(0.0, 255.0);
   let over = Pixel {
-    a: ao as u8,
-    r: (((a.r as f32 * a.a as f32) + (b.r as f32 * b.a as f32 * (255.0 - a.a as f32))) / ao).clamp(0.0, 255.0)  as u8,
-    g: (((a.g as f32 * a.a as f32) + (b.g as f32 * b.a as f32 * (255.0 - a.a as f32))) / ao).clamp(0.0, 255.0)  as u8,
-    b: (((a.b as f32 * a.a as f32) + (b.b as f32 * b.a as f32 * (255.0 - a.a as f32))) / ao).clamp(0.0, 255.0)  as u8,
+    a: ao,
+    r: (((a.r * a.a) + (b.r * b.a * (255.0 - a.a))) / ao).clamp(0.0, 255.0),
+    g: (((a.g * a.a) + (b.g * b.a * (255.0 - a.a))) / ao).clamp(0.0, 255.0),
+    b: (((a.b * a.a) + (b.b * b.a * (255.0 - a.a))) / ao).clamp(0.0, 255.0),
   };
   // println!("OVER {:?} {:?} {:?}", a, b, over);
   over
@@ -93,7 +93,7 @@ pub struct Rect<T> {
 pub struct FB {
   pub w: usize,
   pub h: usize,
-  pixels: Vec<u8>,
+  pixels: Vec<f32>,
 }
 
 impl FB {
@@ -101,7 +101,7 @@ impl FB {
     let fb = FB {
       w: w,
       h: h,
-      pixels: vec![0; w*h*4],
+      pixels: vec![0.0; w*h*4],
     };
     return fb;
   }
@@ -147,7 +147,12 @@ impl FB {
     encoder.set_source_chromaticities(source_chromaticities);
     let mut writer = encoder.write_header().unwrap();
 
-    let sl: &[u8] = &self.pixels;
+    let mut image_data = Vec::with_capacity(self.w * self.h);
+    for (i, x) in self.pixels.iter().enumerate() {
+      image_data.push(*x as u8);
+      // image_data[i] = *x as u8;
+    }
+    let sl: &[u8] = &image_data;
     writer.write_image_data(sl).unwrap(); // Save
   }
 }
@@ -318,7 +323,7 @@ impl Blend {
 
 impl Shape for Blend {
   fn dist(&self, x: f32, y: f32) -> f32 {
-    avgf32(self.shape0.dist(x, y), self.shape1.dist(x, y))
+    avg(self.shape0.dist(x, y), self.shape1.dist(x, y))
   }
 }
 
