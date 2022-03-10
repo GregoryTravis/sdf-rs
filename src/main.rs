@@ -24,7 +24,7 @@ const WHITE: Pixel = Pixel { r: 255.0, g: 255.0, b: 255.0, a: 255.0 };
 const RED: Pixel = Pixel { r: 255.0, g: 0.0, b: 0.0, a: 255.0 };
 const NONE: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
 
-const UPSAMPLE_RENDER: bool = false;
+const UPSAMPLE_RENDER: bool = true;
 
 pub fn length(a: f32, b: f32) -> f32 {
   (a*a + b*b).sqrt()
@@ -326,6 +326,26 @@ impl Shape for Blend {
   }
 }
 
+pub struct Interp {
+  shape0: Rc<dyn Shape>,
+  shape1: Rc<dyn Shape>,
+  alpha: f32,
+}
+
+impl Interp {
+  pub fn new(shape0: Rc<dyn Shape>, shape1: Rc<dyn Shape>, alpha: f32) -> Interp {
+    Interp { shape0: shape0, shape1: shape1, alpha: alpha }
+  }
+}
+
+impl Shape for Interp {
+  fn dist(&self, x: f32, y: f32) -> f32 {
+    let d0 = self.shape0.dist(x, y);
+    let d1 = self.shape1.dist(x, y);
+    (d0 * self.alpha) + (d1 * (1.0 - self.alpha))
+  }
+}
+
 pub struct SmoothUnion {
   shape0: Rc<dyn Shape>,
   shape1: Rc<dyn Shape>,
@@ -540,11 +560,11 @@ fn compile_animation(files: &Vec<String>, ofile: &str) {
 fn main() {
     println!("Hello, world!");
   let (w, h) = (800, 800);
-  let vd = 4.0;
+  let vd = 8.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
-  let num_frames = 10;
+  let num_frames = 1000;
 
-  render_animation_to(w, h, view, num_frames, wacky3, bevel, r"anim.png");
+  render_animation_to(w, h, view, num_frames, wacky6, bevel, r"anim.png");
 }
 
 fn render_animation_to<S>(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
@@ -644,4 +664,37 @@ fn wacky(t: f32) -> (impl Shape, impl Shape) {
   let gridi = Intersection::new(grid.clone(), grid2.clone());
   let gridu = Translate::new(Rc::new(Union::new(grid.clone(), grid2.clone())), 0.2, 0.2 + t);
   (gridi, gridu)
+}
+
+fn wacky4(t: f32) -> impl Shape {
+  let circle = Circle {};
+  let ucircle2 = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(circle), 0.5, 0.5)), 1.0, 1.0));
+  let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(wacky5(t*10.0)), 0.5, 0.5)), 1.0, 1.0));
+  let grid = Rc::new(Translate::new(Rc::new(Grid::new(2.0, 2.0, ucircle.clone())), 0.0, t));
+  let grid2 = Rc::new(Rotation::new(Rc::new(Grid::new(2.0, 2.0, ucircle2.clone())), t));
+  let grid3 = Rc::new(Translate::new(Rc::new(Scale::new(grid.clone(), 2.5, 2.5)), t, 0.0));
+  let gridi = Difference::new(grid3.clone(), grid2.clone());
+  gridi
+}
+
+fn wacky5(t: f32) -> impl Shape {
+  let circle = Rc::new(Circle {});
+  let ucircle = Rc::new(Translate::new(
+    Rc::new(Scale::new(
+      Rc::new(Rotation::new(
+        Rc::new(Square {}), t)), 0.5, 0.5)), 1.0, 1.0));
+  let gridi = SmoothUnion::new(circle, ucircle);
+  gridi
+}
+
+fn wacky6(t: f32) -> impl Shape {
+  let circle = Circle {};
+  let ucircle2 = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(circle), 0.5, 0.5)), 1.0, 1.0));
+  let ucircle = Rc::new(Translate::new(Rc::new(Scale::new(Rc::new(wacky5(t*10.0)), 0.5, 0.5)), 1.0, 1.0));
+  let grid = Rc::new(Translate::new(Rc::new(Grid::new(2.0, 2.0, ucircle.clone())), 0.0, t));
+  let grid2 = Rc::new(Rotation::new(Rc::new(Grid::new(2.0, 2.0, ucircle2.clone())), t));
+  let grid3 = Rc::new(Translate::new(Rc::new(Scale::new(grid.clone(), 2.5, 2.5)), t, 0.0));
+  let alpha = t.sin();
+  let gridi = Interp::new(grid3.clone(), grid2.clone(), alpha);
+  gridi
 }
