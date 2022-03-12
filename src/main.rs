@@ -15,6 +15,7 @@ use apng::Encoder;
 use apng::Frame;
 use apng::PNGImage;
 use na::{Point3, Vector3, Vector2};
+use rand::Rng;
 
 const BLACK: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 255.0 };
 const DGRAY: Pixel = Pixel { r: 64.0, g: 64.0, b: 64.0, a: 255.0 };
@@ -195,6 +196,7 @@ where
   }
 }
 
+// #[derive(Clone, Copy, Debug)]
 pub trait Shape {
   fn dist(&self, x: f32, y: f32) -> f32;
 }
@@ -558,13 +560,13 @@ fn compile_animation(files: &Vec<String>, ofile: &str) {
 }
 
 fn main() {
-    println!("Hello, world!");
+  println!("Hello, world!");
   let (w, h) = (800, 800);
   let vd = 8.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
-  let num_frames = 1000;
+  let num_frames = 10;
 
-  render_animation_to(w, h, view, num_frames, wacky6, bevel, r"anim.png");
+  // render_animation_to(w, h, view, num_frames, wacky6, bevel, r"anim.png");
 }
 
 fn render_animation_to<S>(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
@@ -697,4 +699,69 @@ fn wacky6(t: f32) -> impl Shape {
   let alpha = t.sin();
   let gridi = Interp::new(grid3.clone(), grid2.clone(), alpha);
   gridi
+}
+
+// fn randFromVec<T>(vec: &Vec<T>) -> T {
+//   let n: f32 = rand::thread_rng().gen();
+//   let i: usize = (n * vec.length()) as usize;
+//   vec[i]
+// }
+
+fn rand_atom() -> Rc<dyn Shape> {
+  let n: f32 = rand::thread_rng().gen();
+  if n < 0.5 {
+    Rc::new(Circle {})
+  } else {
+    Rc::new(Square {})
+  }
+}
+
+// fn rand_unop<S>(s: &S)-> Box<dyn Shape>
+fn rand_unop(s: Rc<dyn Shape>)-> Rc<dyn Shape>
+// where S: Shape
+{
+  let n: f32 = rand::thread_rng().gen();
+  if n < 0.33 {
+    let sx: f32 = rand::thread_rng().gen::<f32>() * 2.0;
+    let sy: f32 = rand::thread_rng().gen::<f32>() * 2.0;
+    Rc::new(Scale::new(s, sx, sy))
+  } else if n < 0.66 {
+    let tx: f32 = rand::thread_rng().gen::<f32>() * 3.0;
+    let ty: f32 = rand::thread_rng().gen::<f32>() * 3.0;
+    Rc::new(Translate::new(s, tx, ty))
+  } else {
+    let ang: f32 = rand::thread_rng().gen::<f32>() * std::f32::consts::PI;
+    Rc::new(Rotation::new(s, ang))
+  }
+}
+
+fn rand_binop(s0: Rc<dyn Shape>, s1: Rc<dyn Shape>) -> Rc<dyn Shape> {
+  let n: f32 = rand::thread_rng().gen();
+  let fcount = 6.0;
+  if n < 1.0/fcount {
+    Rc::new(Union::new(s0, s1))
+  } else if n < 2.0/fcount {
+    Rc::new(Difference::new(s0, s1))
+  } else if n < 3.0/fcount {
+    Rc::new(Intersection::new(s0, s1))
+  } else if n < 4.0/fcount {
+    Rc::new(Blend::new(s0, s1))
+  } else if n < 5.0/fcount {
+    let alpha: f32 = rand::thread_rng().gen();
+    Rc::new(Interp::new(s0, s1, alpha))
+  } else {
+    Rc::new(SmoothUnion::new(s0, s1))
+  }
+}
+
+fn rand_shape() -> Rc<dyn Shape> {
+  let n: f32 = rand::thread_rng().gen();
+  let fcount = 3.0;
+  if n < 1.0/fcount {
+    rand_atom()
+  } else if n < 2.0/fcount {
+    rand_unop(rand_shape())
+  } else {
+    rand_binop(rand_shape(), rand_shape())
+  }
 }
