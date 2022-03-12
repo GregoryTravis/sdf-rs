@@ -25,7 +25,7 @@ const WHITE: Pixel = Pixel { r: 255.0, g: 255.0, b: 255.0, a: 255.0 };
 const RED: Pixel = Pixel { r: 255.0, g: 0.0, b: 0.0, a: 255.0 };
 const NONE: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
 
-const UPSAMPLE_RENDER: bool = true;
+const UPSAMPLE_RENDER: bool = false;
 
 pub fn length(a: f32, b: f32) -> f32 {
   (a*a + b*b).sqrt()
@@ -169,19 +169,18 @@ fn downsample_halve(fb: &FB, ofb: &mut FB) {
   }
 }
 
-fn upsample_render<S>(shape: &S,
-                      colorer: fn(shape: &S, x: f32, y:f32) -> Pixel, domain: Rect<f32>, fb: &mut FB)
-where
-  S: Shape
+fn upsample_render(shape: Rc<dyn Shape>,
+                   colorer: fn(shape: Rc<dyn Shape>, x: f32, y:f32) -> Pixel, domain: Rect<f32>, fb: &mut FB)
 {
   let mut ufb = FB::new(fb.w*2, fb.h*2);
   render(shape, colorer, domain, &mut ufb);
   downsample_halve(&ufb, fb);
 }
 
-fn render<S>(shape: &S, colorer: fn(shape: &S, x: f32, y:f32) -> Pixel, domain: Rect<f32>, fb: &mut FB)
-where
-  S: Shape
+fn render(shape: Rc<dyn Shape>, colorer: fn(shape: Rc<dyn Shape>, x: f32, y:f32) -> Pixel, domain: Rect<f32>, fb: &mut FB)
+// fn render<S>(shape: &S, colorer: fn(shape: &S, x: f32, y:f32) -> Pixel, domain: Rect<f32>, fb: &mut FB)
+// where
+//   S: Shape
 {
   let ox = domain.ll.x;
   let oy = domain.ll.y;
@@ -191,13 +190,12 @@ where
     for y in 0..fb.h {
       let fx = ox + ((x as f32) * dx);
       let fy = oy + ((y as f32) * dy);
-      fb.set(x, y, &colorer(shape, fx, fy));
+      fb.set(x, y, &colorer(shape.clone(), fx, fy));
     }
   }
 }
 
-// #[derive(Clone, Copy, Debug)]
-pub trait Shape {
+pub trait Shape: std::fmt::Debug {
   fn dist(&self, x: f32, y: f32) -> f32;
 }
 
@@ -224,6 +222,7 @@ impl Shape for Square {
   }
 }
 
+#[derive(Debug)]
 pub struct Translate {
   shape: Rc<dyn Shape>,
   tx: f32,
@@ -242,6 +241,7 @@ impl Shape for Translate {
   }
 }
 
+#[derive(Debug)]
 pub struct Scale {
   shape: Rc<dyn Shape>,
   sx: f32,
@@ -260,6 +260,7 @@ impl Shape for Scale {
   }
 }
 
+#[derive(Debug)]
 pub struct Union {
   shape0: Rc<dyn Shape>,
   shape1: Rc<dyn Shape>,
@@ -277,6 +278,7 @@ impl Shape for Union {
   }
 }
 
+#[derive(Debug)]
 pub struct Intersection {
   shape0: Rc<dyn Shape>,
   shape1: Rc<dyn Shape>,
@@ -294,6 +296,7 @@ impl Shape for Intersection {
   }
 }
 
+#[derive(Debug)]
 pub struct Difference {
   shape0: Rc<dyn Shape>,
   shape1: Rc<dyn Shape>,
@@ -311,6 +314,7 @@ impl Shape for Difference {
   }
 }
 
+#[derive(Debug)]
 pub struct Blend {
   shape0: Rc<dyn Shape>,
   shape1: Rc<dyn Shape>,
@@ -328,6 +332,7 @@ impl Shape for Blend {
   }
 }
 
+#[derive(Debug)]
 pub struct Interp {
   shape0: Rc<dyn Shape>,
   shape1: Rc<dyn Shape>,
@@ -348,6 +353,7 @@ impl Shape for Interp {
   }
 }
 
+#[derive(Debug)]
 pub struct SmoothUnion {
   shape0: Rc<dyn Shape>,
   shape1: Rc<dyn Shape>,
@@ -374,6 +380,7 @@ impl Shape for SmoothUnion {
   }
 }
 
+#[derive(Debug)]
 pub struct Hmm {
   shape0: Rc<dyn Shape>,
   shape1: Rc<dyn Shape>,
@@ -391,6 +398,7 @@ impl Shape for Hmm {
   }
 }
 
+#[derive(Debug)]
 pub struct Rotation {
   shape: Rc<dyn Shape>,
   bx: Vector2<f32>,
@@ -412,6 +420,7 @@ impl Shape for Rotation {
   }
 }
 
+#[derive(Debug)]
 pub struct Grid {
   w: f32,
   h: f32,
@@ -466,9 +475,7 @@ fn bevel_dist_to_ht(d: f32) -> f32 {
 //   c
 // a-+-b
 //   d
-fn bevel<S>(shape: &S, x: f32, y:f32) -> Pixel
-where
-  S: Shape
+fn bevel(shape: Rc<dyn Shape>, x: f32, y:f32) -> Pixel
 {
   let dist = shape.dist(x, y);
 
@@ -567,12 +574,17 @@ fn main() {
   let num_frames = 10;
 
   // render_animation_to(w, h, view, num_frames, wacky6, bevel, r"anim.png");
+
+  let s = rand_shape();
+  println!("{:?}", s);
+  render_animation_to(w, h, view, num_frames, s, bevel, r"anim.png");
 }
 
-fn render_animation_to<S>(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
-                          sf: fn(f32) -> S, colorer: fn(shape: &S, x: f32, y:f32) -> Pixel, ofile: &str)
-where
-  S: Shape
+fn render_animation_to(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
+                          // sf: fn(f32) -> S, colorer: fn(shape: &S, x: f32, y:f32) -> Pixel, ofile: &str)
+                          // sf: fn(f32) -> Rc<dyn Shape>, colorer: impl Fn(&S, f32, f32) -> Pixel, ofile: &str)
+                          s: Rc<dyn Shape>, colorer: fn(Rc<dyn Shape>, f32, f32) -> Pixel, ofile: &str)
+// where S: Shape
 {
   // cfb.write("image.png".to_string());
   let mut files = Vec::new();
@@ -580,12 +592,12 @@ where
     let mut acfb = FB::new(w, h);
     let filename = format!("image{:0>10}.png", x);
     let dt = (x as f32) / 40.0;
-    let s = sf(dt);
+    // let s = sf(dt);
     let start = Instant::now();
     if UPSAMPLE_RENDER {
-      upsample_render(&s, colorer, view, &mut acfb);
+      upsample_render(s.clone(), colorer, view, &mut acfb);
     } else {
-      render(&s, colorer, view, &mut acfb);
+      render(s.clone(), colorer, view, &mut acfb);
     }
     eprintln!("elapsed {:?}", start.elapsed()); // note :?
     acfb.write(filename.clone());
@@ -721,14 +733,19 @@ fn rand_unop(s: Rc<dyn Shape>)-> Rc<dyn Shape>
 // where S: Shape
 {
   let n: f32 = rand::thread_rng().gen();
-  if n < 0.33 {
+  let fcount = 4.0;
+  if n < 1.0/fcount {
     let sx: f32 = rand::thread_rng().gen::<f32>() * 2.0;
     let sy: f32 = rand::thread_rng().gen::<f32>() * 2.0;
     Rc::new(Scale::new(s, sx, sy))
-  } else if n < 0.66 {
+  } else if n < 2.0/fcount {
     let tx: f32 = rand::thread_rng().gen::<f32>() * 3.0;
     let ty: f32 = rand::thread_rng().gen::<f32>() * 3.0;
     Rc::new(Translate::new(s, tx, ty))
+  } else if n < 3.0/fcount {
+    let w: f32 = rand::thread_rng().gen::<f32>() + 1.0;
+    let h: f32 = rand::thread_rng().gen::<f32>() + 1.0;
+    Rc::new(Grid::new(w, h, s))
   } else {
     let ang: f32 = rand::thread_rng().gen::<f32>() * std::f32::consts::PI;
     Rc::new(Rotation::new(s, ang))
