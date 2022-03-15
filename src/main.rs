@@ -25,6 +25,7 @@ const WHITE: Pixel = Pixel { r: 255.0, g: 255.0, b: 255.0, a: 255.0 };
 const RED: Pixel = Pixel { r: 255.0, g: 0.0, b: 0.0, a: 255.0 };
 const NONE: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
 
+const OLD: bool = false;
 const UPSAMPLE_RENDER: bool = false;
 
 pub fn length(a: f32, b: f32) -> f32 {
@@ -209,6 +210,36 @@ impl Shape for Circle {
     let d = length(x, y) - 1.0;
     // println!("dist {} {} {}|", x, y, d);
     d
+  }
+}
+
+fn non_stupid_atan2(x: f32, y: f32) -> f32 {
+  let mut a = y.atan2(x);
+  if a < 0.0 {
+    a += 2.0 * std::f32::consts::PI;
+  }
+  a
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Flower {
+  num_petals: i32,
+}
+
+impl Flower {
+  pub fn new(num_petals: i32) -> Flower {
+    Flower { num_petals: num_petals }
+  }
+}
+
+impl Shape for Flower {
+  fn dist(&self, x: f32, y: f32) -> f32 {
+    let ang = non_stupid_atan2(x, y);
+    let raw_dist = (x*x + y*y).sqrt();
+    let radius = (ang * (self.num_petals as f32 / 2.0)).sin().abs();
+    let dist = raw_dist / radius;
+    // println!("flower {} {} {} {} {} {}", x, y, ang, raw_dist, radius, dist);
+    dist - 1.0
   }
 }
 
@@ -438,10 +469,43 @@ fn grid_fmod(a: f32, b: f32) -> f32 {
   (aob - aob.floor()) * b
 }
 
+// Returns (mod, i), I forget what they're called
+fn grid_fmod2(a: f32, b: f32) -> (f32, i32) {
+  let aob = a / b;
+  (((aob - aob.floor()) * b), aob.floor() as i32)
+}
+
 impl Shape for Grid {
   fn dist(&self, x: f32, y: f32) -> f32 {
     let xx = grid_fmod(x, self.w);
     let yy = grid_fmod(y, self.h);
+    self.shape.dist(xx, yy)
+  }
+}
+
+#[derive(Debug)]
+pub struct ParityFlipGrid {
+  w: f32,
+  h: f32,
+  shape: Rc<dyn Shape>,
+}
+
+impl ParityFlipGrid {
+  pub fn new(w: f32, h: f32, shape: Rc<dyn Shape>) -> ParityFlipGrid {
+    ParityFlipGrid { w: w, h: h, shape: shape }
+  }
+}
+
+impl Shape for ParityFlipGrid {
+  fn dist(&self, x: f32, y: f32) -> f32 {
+    let (mut xx, xi) = grid_fmod2(x, self.w);
+    let (mut yy, yi) = grid_fmod2(y, self.h);
+    if xi.abs() % 2 == 1 {
+      xx = self.w - xx;
+    }
+    if yi.abs() % 2 == 1 {
+      yy = self.h - yy;
+    }
     self.shape.dist(xx, yy)
   }
 }
@@ -478,6 +542,7 @@ fn bevel_dist_to_ht(d: f32) -> f32 {
 fn bevel(shape: Rc<dyn Shape>, x: f32, y:f32) -> Pixel
 {
   let dist = shape.dist(x, y);
+  // println!("dist {} {} {}", x, y, dist);
 
   if dist > 0.0 {
     return BLACK;
@@ -567,17 +632,44 @@ fn compile_animation(files: &Vec<String>, ofile: &str) {
 }
 
 fn main() {
+  if OLD {
+    old_main();
+  } else {
+    shp_main();
+  }
+}
+
+fn old_main() {
   println!("Hello, world!");
+  // println!("{} {} {} {}", 4.0_f32.floor(), 4.3_f32.floor(), -4.0_f32.floor(), -4.3_f32.floor());
+  // println!("{} {} {} {}", 4.0_f32.floor() as i32, 4.3_f32.floor() as i32, -4.0_f32.floor() as i32, -4.3_f32.floor() as i32);
+  // println!("{:?} {:?} {:?} {:?}", grid_fmod2(4.0_f32, 3.0), grid_fmod2(4.3_f32, 3.0), grid_fmod2(-4.0_f32, 3.0), grid_fmod2(-4.3_f32, 3.0));
+  println!("{} {} {} {}",
+           1.0_f32.atan2(1.0), // 1st
+           1.0_f32.atan2(-1.0), // 2nd
+           -1.0_f32.atan2(-1.0), // 3rd
+           -1.0_f32.atan2(1.0)); // 4th
+  println!("{} {} {} {} {} {} {} {}",
+           non_stupid_atan2(1.0, 0.0),
+           non_stupid_atan2(1.0, 1.0),
+           non_stupid_atan2(0.0, 1.0),
+           non_stupid_atan2(-1.0, 1.0),
+           non_stupid_atan2(-1.0, 0.0),
+           non_stupid_atan2(-1.0, -1.0),
+           non_stupid_atan2(0.0, -1.0),
+           non_stupid_atan2(1.0, -1.0));
   let (w, h) = (800, 800);
-  let vd = 8.0;
+  // let (w, h) = (4, 4);
+  let vd = 2.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
-  let num_frames = 10;
+  let num_frames = 1;
 
   // render_animation_to(w, h, view, num_frames, wacky6, bevel, r"anim.png");
 
-  let s = rand_shape();
+  // let s = rand_shape();
+  let s = wacky8(0.0);
   println!("{:?}", s);
-  render_animation_to(w, h, view, num_frames, s, bevel, r"anim.png");
+  render_animation_to(w, h, view, num_frames, Rc::new(s), bevel, r"anim.png");
 }
 
 fn render_animation_to(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
@@ -713,10 +805,25 @@ fn wacky6(t: f32) -> impl Shape {
   gridi
 }
 
+fn wacky7(t: f32) -> impl Shape {
+  let circle = Rc::new(Translate::new(Rc::new(Circle {}), -0.25, -0.25));
+  let grid = ParityFlipGrid::new(2.0, 2.0, circle.clone());
+  grid
+}
+
+fn wacky8(t: f32) -> impl Shape {
+  Flower::new(7)
+}
+
 // fn randFromVec<T>(vec: &Vec<T>) -> T {
 //   let n: f32 = rand::thread_rng().gen();
 //   let i: usize = (n * vec.length()) as usize;
 //   vec[i]
+// }
+
+// // Takes two shapes present in the unit square, grids them and slowly
+// // slides/translates them, with smooth union.
+// fn grid_grind(t: f32) -> impl Shape {
 // }
 
 fn rand_atom() -> Rc<dyn Shape> {
@@ -782,3 +889,154 @@ fn rand_shape() -> Rc<dyn Shape> {
     rand_binop(rand_shape(), rand_shape())
   }
 }
+
+// enum Atom {
+//   Fun(Box<dyn Fn(f32, f32, f32) -> f32>),
+// }
+
+type Shp = Rc<dyn Fn(f32, f32, f32) -> f32>;
+type Colorer = Rc<dyn Fn(Shp, f32, f32, f32) -> Pixel>;
+
+fn render_shp(shape: Shp, colorer: Colorer, domain: Rect<f32>, fb: &mut FB, t: f32)
+{
+  let ox = domain.ll.x;
+  let oy = domain.ll.y;
+  let dx = (domain.ur.x - domain.ll.x) / (fb.w as f32);
+  let dy = (domain.ur.y - domain.ll.y) / (fb.h as f32);
+  for x in 0..fb.w {
+    for y_inv in 0..fb.h {
+      let y = fb.h - 1 - y_inv;
+      let fx = ox + ((x as f32) * dx);
+      let fy = oy + ((y as f32) * dy);
+      fb.set(x, y, &colorer(shape.clone(), fx, fy, t));
+    }
+  }
+}
+
+fn render_shp_to(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
+                 s: Shp, colorer: Colorer, ofile: &str)
+{
+  let mut files = Vec::new();
+  for x in 0..num_frames {
+    let mut acfb = FB::new(w, h);
+    let filename = format!("image{:0>10}.png", x);
+    let t = (x as f32) / 40.0;
+    let start = Instant::now();
+    render_shp(s.clone(), colorer.clone(), view, &mut acfb, t);
+    eprintln!("elapsed {:?}", start.elapsed()); // note :?
+    acfb.write(filename.clone());
+    files.push(filename);
+  }
+
+  compile_animation(&files, r"anim.png");
+
+  let clean_up = true;
+  if clean_up {
+      for filename in files {
+          match std::fs::remove_file(filename) {
+              Ok(_n) => (),
+              Err(err) => eprintln!("{}", err),
+          }
+      }
+  }
+}
+
+fn circle() -> Shp { Rc::new(|x: f32, y: f32, t: f32| { length(x, y) - 1.0 }) }
+fn square() -> Shp { Rc::new(|x: f32, y: f32, t: f32| { (x.abs() - 1.0).max(y.abs() - 1.0) }) }
+
+type Transform = Rc<dyn Fn(f32, f32, f32) -> (f32, f32, f32)>;
+
+fn translate(tx: f32, ty: f32) -> Transform {
+  Rc::new(move |x: f32, y:f32, t: f32| { (x - tx, y - ty, t) })
+}
+
+fn rotation(ang: f32) -> Transform {
+  let bx = Vector2::new(ang.cos(), ang.sin());
+  let by = Vector2::new(-ang.sin(), ang.cos());
+
+  Rc::new(move |x: f32, y:f32, t: f32| {
+    let rv = x * bx + y * by;
+    (rv.x, rv.y, t)
+  })
+}
+
+fn transform(s: Shp, tr: Transform) -> Shp {
+  Rc::new(move |x: f32, y: f32, t: f32| {
+    let (nx, ny, nt) = tr(x, y, t);
+    s(nx, ny, nt)
+  })
+}
+
+fn shp_main() {
+  let (w, h) = (800, 800);
+  // let (w, h) = (4, 4);
+  let vd = 2.0;
+  let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
+  let num_frames = 1;
+
+  // let s = |x: f32, y: f32, t: f32| { length(x, y) - 1.0 };
+  // let s = square();
+  let s = transform(transform(square(), translate(0.5, 0.0)), rotation(0.7));
+  render_shp_to(w, h, view, num_frames, s, Rc::new(bevel_shp), r"anim.png");
+}
+
+fn bevel_shp(shape: Shp, x: f32, y:f32, t: f32) -> Pixel
+{
+  let dist = shape(x, y, t);
+  // println!("dist {} {} {}", x, y, dist);
+
+  if dist > 0.0 {
+    return BLACK;
+  }
+
+  let bit = 0.005;
+  let ax = x - bit;
+  let ay = y;
+  let bx = x + bit;
+  let by = y;
+  let cx = x;
+  let cy = y - bit;
+  let dx = x;
+  let dy = y + bit;
+
+  let adist = shape(ax, ay, t);
+  let bdist = shape(bx, by, t);
+  let cdist = shape(cx, cy, t);
+  let ddist = shape(dx, dy, t);
+
+  let az = bevel_dist_to_ht(adist);
+  let bz = bevel_dist_to_ht(bdist);
+  let cz = bevel_dist_to_ht(cdist);
+  let dz = bevel_dist_to_ht(ddist);
+
+  let a = Point3::new(ax, ay, az);
+  let b = Point3::new(bx, by, bz);
+  let c = Point3::new(cx, cy, cz);
+  let d = Point3::new(dx, dy, dz);
+
+  let ba: Vector3<f32> = b - a;
+  let cd: Vector3<f32> = c - d;
+
+  let norm = cd.cross(&ba).normalize();
+
+  let light = Vector3::new(-1.0, 1.0, 1.0).normalize();
+
+  let brightness = norm.dot(&light);
+
+  GRAY.lerp(WHITE, brightness.clamp(0.0, 1.0))
+}
+
+// #[derive(Debug)]
+// pub struct ShpShape {
+//   shp: Shp,
+// }
+
+// impl Shape for ShpShape {
+//   fn dist(&self, x: f32, y: f32) -> f32 {
+//     self.shape.dist(x - self.tx, y - self.ty)
+//   }
+// }
+
+// fn shp_to_shape(shp: Shp) -> impl Shape {
+//   ShpShape { shp: shp }
+// }
