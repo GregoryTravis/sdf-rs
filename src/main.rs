@@ -950,11 +950,11 @@ fn translate(tx: f32, ty: f32) -> Transform {
   Rc::new(move |x: f32, y:f32, t: f32| { (x - tx, y - ty, t) })
 }
 
-fn rotation(ang: f32) -> Transform {
-  let bx = Vector2::new(ang.cos(), ang.sin());
-  let by = Vector2::new(-ang.sin(), ang.cos());
-
+fn rotation(start_ang: f32, delta_ang: f32) -> Transform {
   Rc::new(move |x: f32, y:f32, t: f32| {
+    let ang = start_ang + t * delta_ang;
+    let bx = Vector2::new(ang.cos(), ang.sin());
+    let by = Vector2::new(-ang.sin(), ang.cos());
     let rv = x * bx + y * by;
     (rv.x, rv.y, t)
   })
@@ -972,11 +972,11 @@ fn shp_main() {
   // let (w, h) = (4, 4);
   let vd = 2.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
-  let num_frames = 1;
+  let num_frames = 10;
 
   // let s = |x: f32, y: f32, t: f32| { length(x, y) - 1.0 };
   // let s = square();
-  let s = transform(transform(square(), translate(0.5, 0.0)), rotation(0.7));
+  let s = transform(transform(square(), translate(0.5, 0.0)), rotation(0.0, 0.7));
   render_shp_to(w, h, view, num_frames, s, Rc::new(bevel_shp), r"anim.png");
 }
 
