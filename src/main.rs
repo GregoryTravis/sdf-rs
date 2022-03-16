@@ -26,7 +26,7 @@ const RED: Pixel = Pixel { r: 255.0, g: 0.0, b: 0.0, a: 255.0 };
 const NONE: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
 
 const OLD: bool = false;
-const UPSAMPLE_RENDER: bool = false;
+const UPSAMPLE_RENDER: bool = true;
 
 pub fn length(a: f32, b: f32) -> f32 {
   (a*a + b*b).sqrt()
@@ -897,7 +897,14 @@ fn rand_shape() -> Rc<dyn Shape> {
 type Shp = Rc<dyn Fn(f32, f32, f32) -> f32>;
 type Colorer = Rc<dyn Fn(Shp, f32, f32, f32) -> Pixel>;
 
-fn render_shp(shape: Shp, colorer: Colorer, domain: Rect<f32>, fb: &mut FB, t: f32)
+fn upsample_render_shp(shape: Shp, colorer: Colorer, domain: Rect<f32>, fb: &mut FB, t: f32)
+{
+  let mut ufb = FB::new(fb.w*2, fb.h*2);
+  regs_render_shp(shape, colorer, domain, &mut ufb, t);
+  downsample_halve(&ufb, fb);
+}
+
+fn regs_render_shp(shape: Shp, colorer: Colorer, domain: Rect<f32>, fb: &mut FB, t: f32)
 {
   let ox = domain.ll.x;
   let oy = domain.ll.y;
@@ -910,6 +917,14 @@ fn render_shp(shape: Shp, colorer: Colorer, domain: Rect<f32>, fb: &mut FB, t: f
       let fy = oy + ((y as f32) * dy);
       fb.set(x, y, &colorer(shape.clone(), fx, fy, t));
     }
+  }
+}
+
+fn render_shp(shape: Shp, colorer: Colorer, domain: Rect<f32>, fb: &mut FB, t: f32) {
+  if UPSAMPLE_RENDER {
+    upsample_render_shp(shape, colorer, domain, fb, t);
+  } else {
+    regs_render_shp(shape, colorer, domain, fb, t);
   }
 }
 
