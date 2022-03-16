@@ -995,18 +995,36 @@ fn smooth_union_binop(d0: f32, d1: f32) -> f32 {
   inside_distance + outside_distance
 }
 
+fn pf_grid(w: f32, h:f32) -> Transform {
+  Rc::new(move |x: f32, y:f32, t: f32| {
+    let (mut xx, xi) = grid_fmod2(x, w);
+    let (mut yy, yi) = grid_fmod2(y, h);
+    if xi.abs() % 2 == 1 {
+      xx = w - xx;
+    }
+    if yi.abs() % 2 == 1 {
+      yy = h - yy;
+    }
+    (xx, yy, t)
+  })
+
+}
+
 fn shp_main() {
   let (w, h) = (800, 800);
   // let (w, h) = (4, 4);
-  let vd = 2.0;
+  let vd = 8.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
   let num_frames = 50;
 
   // let s = |x: f32, y: f32, t: f32| { length(x, y) - 1.0 };
   // let s = square();
-  let s = smooth_union(
-    transform(transform(square(), translate(0.0, 0.0, 1.0, 0.0)), rotation(0.0, 0.7)),
-    transform(circle(), translate(0.0, 0.0, 0.0, 2.0)));
+  let s =
+    transform(
+      smooth_union(
+        transform(transform(square(), translate(0.0, 0.0, 1.0, 0.0)), rotation(0.0, 0.7)),
+        transform(circle(), translate(0.0, 0.0, 0.0, 2.0))),
+      pf_grid(2.0, 2.0));
   render_shp_to(w, h, view, num_frames, s, Rc::new(bevel_shp), r"anim.png");
 }
 
