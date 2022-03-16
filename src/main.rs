@@ -946,8 +946,14 @@ fn square() -> Shp { Rc::new(|x: f32, y: f32, t: f32| { (x.abs() - 1.0).max(y.ab
 
 type Transform = Rc<dyn Fn(f32, f32, f32) -> (f32, f32, f32)>;
 
-fn translate(tx: f32, ty: f32) -> Transform {
-  Rc::new(move |x: f32, y:f32, t: f32| { (x - tx, y - ty, t) })
+type DistBinop = Rc<dyn Fn(f32, f32) -> f32>;
+
+fn translate(start_tx: f32, start_ty: f32, delta_tx: f32, delta_ty: f32) -> Transform {
+  Rc::new(move |x: f32, y:f32, t: f32| {
+    let tx = start_tx + t * delta_tx;
+    let ty = start_ty + t * delta_ty;
+    (x - tx, y - ty, t)
+  })
 }
 
 fn rotation(start_ang: f32, delta_ang: f32) -> Transform {
@@ -967,16 +973,40 @@ fn transform(s: Shp, tr: Transform) -> Shp {
   })
 }
 
+fn smooth_union(s0: Shp, s1: Shp) -> Shp {
+  binopper(s0, s1, Rc::new(smooth_union_binop))
+}
+
+fn binopper(s0: Shp, s1: Shp, op: DistBinop) -> Shp {
+  Rc::new(move |x: f32, y: f32, t: f32| {
+    let d0 = s0(x, y, t);
+    let d1 = s1(x, y, t);
+    op(d0, d1)
+  })
+}
+
+fn smooth_union_binop(d0: f32, d1: f32) -> f32 {
+  let r = 0.3;
+  let md0 = (d0 - r).min(0.0);
+  let md1 = (d1 - r).min(0.0);
+  let inside_distance = -length(md0, md1);
+  let simple_union = d0.min(d1);
+  let outside_distance = simple_union.max(r);
+  inside_distance + outside_distance
+}
+
 fn shp_main() {
   let (w, h) = (800, 800);
   // let (w, h) = (4, 4);
   let vd = 2.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
-  let num_frames = 10;
+  let num_frames = 50;
 
   // let s = |x: f32, y: f32, t: f32| { length(x, y) - 1.0 };
   // let s = square();
-  let s = transform(transform(square(), translate(0.5, 0.0)), rotation(0.0, 0.7));
+  let s = smooth_union(
+    transform(transform(square(), translate(0.0, 0.0, 1.0, 0.0)), rotation(0.0, 0.7)),
+    transform(circle(), translate(0.0, 0.0, 0.0, 2.0)));
   render_shp_to(w, h, view, num_frames, s, Rc::new(bevel_shp), r"anim.png");
 }
 
