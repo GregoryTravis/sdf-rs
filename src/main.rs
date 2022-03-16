@@ -956,6 +956,13 @@ fn translate(start_tx: f32, start_ty: f32, delta_tx: f32, delta_ty: f32) -> Tran
   })
 }
 
+fn scale(start_s: f32, delta_s: f32) -> Transform {
+  Rc::new(move |x: f32, y:f32, t: f32| {
+    let s = start_s + t * delta_s;
+    (x / s, y / s, t)
+  })
+}
+
 fn rotation(start_ang: f32, delta_ang: f32) -> Transform {
   Rc::new(move |x: f32, y:f32, t: f32| {
     let ang = start_ang + t * delta_ang;
@@ -971,6 +978,18 @@ fn transform(s: Shp, tr: Transform) -> Shp {
     let (nx, ny, nt) = tr(x, y, t);
     s(nx, ny, nt)
   })
+}
+
+fn difference(s0: Shp, s1: Shp) -> Shp {
+  binopper(s0, s1, Rc::new(move |d0: f32, d1: f32| {
+    d0.max(-d1)
+  }))
+}
+
+fn intersection(s0: Shp, s1: Shp) -> Shp {
+  binopper(s0, s1, Rc::new(move |d0: f32, d1: f32| {
+    d0.max(d1)
+  }))
 }
 
 fn smooth_union(s0: Shp, s1: Shp) -> Shp {
@@ -1013,18 +1032,37 @@ fn pf_grid(w: f32, h:f32) -> Transform {
 fn shp_main() {
   let (w, h) = (800, 800);
   // let (w, h) = (4, 4);
-  let vd = 8.0;
+  let vd = 4.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
-  let num_frames = 50;
+  let num_frames = 20;
 
   // let s = |x: f32, y: f32, t: f32| { length(x, y) - 1.0 };
   // let s = square();
-  let s =
+  let cs =
     transform(
       smooth_union(
         transform(transform(square(), translate(0.0, 0.0, 1.0, 0.0)), rotation(0.0, 0.7)),
         transform(circle(), translate(0.0, 0.0, 0.0, 2.0))),
       pf_grid(2.0, 2.0));
+  let ss =
+    transform(
+      transform(
+        transform(
+          square(),
+          scale(0.25, 0.0)),
+        translate(0.5, 0.5, 0.0, 0.0)),
+      pf_grid(1.0, 1.0));
+  let rss =
+    transform(
+      transform(
+        ss,
+        translate(0.0, 0.0, 1.0, 0.0)),
+      rotation(0.7, 0.0));
+  let s = cs;
+  // let s =
+  //   intersection(
+  //     rss,
+  //     cs);
   render_shp_to(w, h, view, num_frames, s, Rc::new(bevel_shp), r"anim.png");
 }
 
