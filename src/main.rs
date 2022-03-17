@@ -25,8 +25,9 @@ const WHITE: Pixel = Pixel { r: 255.0, g: 255.0, b: 255.0, a: 255.0 };
 const RED: Pixel = Pixel { r: 255.0, g: 0.0, b: 0.0, a: 255.0 };
 const NONE: Pixel = Pixel { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
 
+const FPS: u16 = 20;
 const OLD: bool = false;
-const UPSAMPLE_RENDER: bool = true;
+const UPSAMPLE_RENDER: bool = false;
 
 pub fn length(a: f32, b: f32) -> f32 {
   (a*a + b*b).sqrt()
@@ -621,7 +622,7 @@ fn compile_animation(files: &Vec<String>, ofile: &str) {
   let mut encoder = Encoder::new(&mut out, config).unwrap();
   let frame = Frame {
     delay_num: Some(1),
-    delay_den: Some(20),
+    delay_den: Some(FPS),
     ..Default::default()
   };
 
@@ -815,12 +816,6 @@ fn wacky8(t: f32) -> impl Shape {
   Flower::new(7)
 }
 
-// fn randFromVec<T>(vec: &Vec<T>) -> T {
-//   let n: f32 = rand::thread_rng().gen();
-//   let i: usize = (n * vec.length()) as usize;
-//   vec[i]
-// }
-
 // // Takes two shapes present in the unit square, grids them and slowly
 // // slides/translates them, with smooth union.
 // fn grid_grind(t: f32) -> impl Shape {
@@ -894,8 +889,9 @@ fn rand_shape() -> Rc<dyn Shape> {
 //   Fun(Box<dyn Fn(f32, f32, f32) -> f32>),
 // }
 
-type Shp = Rc<dyn Fn(f32, f32, f32) -> f32>;
+pub type Shp = Rc<dyn Fn(f32, f32, f32) -> f32>;
 type Colorer = Rc<dyn Fn(Shp, f32, f32, f32) -> Pixel>;
+type VF<T> = Rc<dyn Fn(f32) -> T>;
 
 fn upsample_render_shp(shape: Shp, colorer: Colorer, domain: Rect<f32>, fb: &mut FB, t: f32)
 {
@@ -915,7 +911,7 @@ fn regs_render_shp(shape: Shp, colorer: Colorer, domain: Rect<f32>, fb: &mut FB,
       let y = fb.h - 1 - y_inv;
       let fx = ox + ((x as f32) * dx);
       let fy = oy + ((y as f32) * dy);
-      fb.set(x, y, &colorer(shape.clone(), fx, fy, t));
+      fb.set(x, y_inv, &colorer(shape.clone(), fx, fy, t));
     }
   }
 }
@@ -928,9 +924,10 @@ fn render_shp(shape: Shp, colorer: Colorer, domain: Rect<f32>, fb: &mut FB, t: f
   }
 }
 
-fn render_shp_to(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
+fn render_shp_to(w: usize, h: usize, view: Rect<f32>, duration: f32,
                  s: Shp, colorer: Colorer, ofile: &str)
 {
+  let num_frames = (duration * (FPS as f32)) as u32;
   let mut files = Vec::new();
   for x in 0..num_frames {
     let mut acfb = FB::new(w, h);
@@ -959,9 +956,36 @@ fn render_shp_to(w: usize, h: usize, view: Rect<f32>, num_frames: u32,
 fn circle() -> Shp { Rc::new(|x: f32, y: f32, t: f32| { length(x, y) - 1.0 }) }
 fn square() -> Shp { Rc::new(|x: f32, y: f32, t: f32| { (x.abs() - 1.0).max(y.abs() - 1.0) }) }
 
+fn flower(num_petals: i32) -> Shp { Rc::new(move |x: f32, y: f32, t: f32| {
+  let ang = non_stupid_atan2(x, y);
+  let raw_dist = (x*x + y*y).sqrt();
+  let radius = (ang * (num_petals as f32 / 2.0)).sin().abs();
+  let dist = raw_dist / radius;
+  // println!("flower {} {} {} {} {} {}", x, y, ang, raw_dist, radius, dist);
+  dist - 1.0
+}) }
+
 type Transform = Rc<dyn Fn(f32, f32, f32) -> (f32, f32, f32)>;
 
 type DistBinop = Rc<dyn Fn(f32, f32) -> f32>;
+
+fn affine(ox: f32, x: f32) -> VF<f32> {
+  Rc::new(move |t: f32| {
+    ox + t * x
+  })
+}
+
+fn sine(phase: f32, hz: f32, amplitude: f32) -> VF<f32> {
+  Rc::new(move |t: f32| {
+    (phase + t * hz * std::f32::consts::PI).sin() * amplitude
+  })
+}
+
+fn vf_translate(tx: VF<f32>, ty: VF<f32>) -> Transform {
+  Rc::new(move |x: f32, y:f32, t: f32| {
+    (x - tx(t), y - ty(t), t)
+  })
+}
 
 fn translate(start_tx: f32, start_ty: f32, delta_tx: f32, delta_ty: f32) -> Transform {
   Rc::new(move |x: f32, y:f32, t: f32| {
@@ -1001,14 +1025,53 @@ fn difference(s0: Shp, s1: Shp) -> Shp {
   }))
 }
 
+fn union(s0: Shp, s1: Shp) -> Shp {
+  binopper(s0, s1, Rc::new(move |d0: f32, d1: f32| {
+    d0.min(d1)
+  }))
+}
+
 fn intersection(s0: Shp, s1: Shp) -> Shp {
   binopper(s0, s1, Rc::new(move |d0: f32, d1: f32| {
     d0.max(d1)
   }))
 }
 
+fn interp(alpha: f32, s0: Shp, s1: Shp) -> Shp {
+  binopper(s0, s1, Rc::new(move |d0: f32, d1: f32| {
+    if alpha < 0.0 {
+      d0
+    } else if alpha >= 1.0 {
+      d1
+    } else {
+      (d0 * (1.0 - alpha)) + (d1 * alpha)
+    }
+  }))
+}
+
+// TODO why do we have to clone the shps here but nowhere else?
+fn interp_anim(duration: f32, s0: Shp, s1: Shp) -> Shp {
+  Rc::new(move |x: f32, y: f32, t: f32| {
+    interp(t / duration, s0.clone(), s1.clone())(x, y, t)
+  })
+}
+
+fn hmm(s0: Shp, s1: Shp) -> Shp {
+  binopper(s0, s1, Rc::new(move |d0: f32, d1: f32| {
+    d0 + d1
+  }))
+}
+
 fn smooth_union(s0: Shp, s1: Shp) -> Shp {
-  binopper(s0, s1, Rc::new(smooth_union_binop))
+  binopper(s0, s1, Rc::new(move |d0: f32, d1: f32| {
+      let r = 0.3;
+      let md0 = (d0 - r).min(0.0);
+      let md1 = (d1 - r).min(0.0);
+      let inside_distance = -length(md0, md1);
+      let simple_union = d0.min(d1);
+      let outside_distance = simple_union.max(r);
+      inside_distance + outside_distance
+  }))
 }
 
 fn binopper(s0: Shp, s1: Shp, op: DistBinop) -> Shp {
@@ -1017,16 +1080,6 @@ fn binopper(s0: Shp, s1: Shp, op: DistBinop) -> Shp {
     let d1 = s1(x, y, t);
     op(d0, d1)
   })
-}
-
-fn smooth_union_binop(d0: f32, d1: f32) -> f32 {
-  let r = 0.3;
-  let md0 = (d0 - r).min(0.0);
-  let md1 = (d1 - r).min(0.0);
-  let inside_distance = -length(md0, md1);
-  let simple_union = d0.min(d1);
-  let outside_distance = simple_union.max(r);
-  inside_distance + outside_distance
 }
 
 fn pf_grid(w: f32, h:f32) -> Transform {
@@ -1041,7 +1094,87 @@ fn pf_grid(w: f32, h:f32) -> Transform {
     }
     (xx, yy, t)
   })
+}
 
+fn grid(w: f32, h:f32) -> Transform {
+  Rc::new(move |x: f32, y:f32, t: f32| {
+    let xx = grid_fmod(x, w);
+    let yy = grid_fmod(y, h);
+    (xx, yy, t)
+  })
+}
+
+fn rand_central_shape() -> Shp {
+  let n: f32 = rand::thread_rng().gen();
+  if n < 0.33 {
+    circle()
+  } else if n < 0.66 {
+    square()
+  } else {
+    let petals: i32 = rand::thread_rng().gen_range(3, 8);
+    flower(petals)
+  }
+}
+
+fn rand_small_transform() -> Transform {
+  let n: f32 = rand::thread_rng().gen();
+  if n < 0.33 {
+    let tx = affine(rand::thread_rng().gen::<f32>() * 0.5, 0.0);
+    let ty = affine(rand::thread_rng().gen::<f32>() * 0.5, 0.0);
+    vf_translate(tx, ty)
+  } else if n < 0.66 {
+    let s = rand::thread_rng().gen_range(0.25, 2.0);
+    scale(s, 0.0)
+  } else {
+    let a = rand::thread_rng().gen_range(0.0, std::f32::consts::PI);
+    rotation(a, 0.0)
+  }
+}
+
+fn rand_clump() -> Shp {
+  let a = transform(rand_central_shape(), rand_small_transform());
+  let b = transform(rand_central_shape(), rand_small_transform());
+  let c = transform(rand_central_shape(), rand_small_transform());
+  let mut vec = Vec::new();
+  vec.push(union as fn(Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>, Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>) -> Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>);
+  vec.push(intersection as fn(Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>, Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>) -> Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>);
+  vec.push(difference as fn(Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>, Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>) -> Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>);
+  vec.push(smooth_union as fn(Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>, Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>) -> Rc<(dyn Fn(f32, f32, f32) -> f32 + 'static)>);
+  let op0 = rand_from_vec(&vec);
+  let op1 = rand_from_vec(&vec);
+  op0(op1(a, b), c)
+}
+
+fn rand_from_vec<T>(vec: &Vec<T>) -> &T {
+  let n: f32 = rand::thread_rng().gen();
+  let i: usize = (n * (*vec).len() as f32) as usize;
+  &vec[i]
+}
+
+fn clump_anim() -> Shp {
+  let c0 = rand_clump();
+  let c1 = rand_clump();
+  let c2 = rand_clump();
+  let a0 = interp_anim(1.0, c0, c1.clone());
+  let a1 = interp_anim(1.0, c1, c2);
+  seq(a0, a1, 1.0)
+}
+
+// fn clump_anim(num: u32) -> Shp {
+//   let mut c = rand_clump();
+//   for i in 1..num {
+//     let cc = interp_anim(1.0, c, rand_clump());
+//   }
+// }
+
+fn seq(s0: Shp, s1: Shp, when: f32) -> Shp {
+  Rc::new(move |x: f32, y:f32, t: f32| {
+    if t < when {
+      s0(x, y, t)
+    } else {
+      s1(x, y, t - when)
+    }
+  })
 }
 
 fn shp_main() {
@@ -1049,36 +1182,86 @@ fn shp_main() {
   // let (w, h) = (4, 4);
   let vd = 4.0;
   let view = Rect { ll: Pt { x: -vd, y: -vd }, ur: Pt { x: vd, y: vd } };
-  let num_frames = 20;
+  // let num_frames = 100;
 
-  // let s = |x: f32, y: f32, t: f32| { length(x, y) - 1.0 };
-  // let s = square();
-  let cs =
-    transform(
-      smooth_union(
-        transform(transform(square(), translate(0.0, 0.0, 1.0, 0.0)), rotation(0.0, 0.7)),
-        transform(circle(), translate(0.0, 0.0, 0.0, 2.0))),
-      pf_grid(2.0, 2.0));
-  let ss =
-    transform(
-      transform(
-        transform(
-          square(),
-          scale(0.25, 0.0)),
-        translate(0.5, 0.5, 0.0, 0.0)),
-      pf_grid(1.0, 1.0));
-  let rss =
-    transform(
-      transform(
-        ss,
-        translate(0.0, 0.0, 1.0, 0.0)),
-      rotation(0.7, 0.0));
-  let s = cs;
+  // let cs =
+  //   transform(
+  //     smooth_union(
+  //       transform(transform(square(), translate(0.0, 0.0, 1.0, 0.0)), rotation(0.0, 0.7)),
+  //       transform(circle(), translate(0.0, 0.0, 0.0, 2.0))),
+  //     pf_grid(2.0, 2.0));
+  // let ss =
+  //   transform(
+  //     transform(
+  //       transform(
+  //         square(),
+  //         scale(0.25, 0.0)),
+  //       translate(0.5, 0.5, 0.0, 0.0)),
+  //     pf_grid(1.0, 1.0));
+  // let rss =
+  //   transform(
+  //     transform(
+  //       ss,
+  //       translate(0.0, 0.0, 1.0, 0.0)),
+  //     rotation(0.7, 0.0));
+  // let s = cs;
+
+  // let cs =
+  //   transform(
+  //     smooth_union(
+  //       transform(transform(square(), translate(0.0, 0.0, 1.0, 0.0)), rotation(0.0, 0.7)),
+  //       transform(circle(), translate(0.0, 0.0, 0.0, 2.0))),
+  //     pf_grid(2.0, 2.0));
+  // let ss =
+  //   transform(
+  //     transform(
+  //       transform(
+  //         square(),
+  //         scale(0.25, 0.0)),
+  //       translate(0.5, 0.5, 0.0, 0.0)),
+  //     pf_grid(1.0, 1.0));
+  // let rss =
+  //   transform(
+  //     transform(
+  //       ss,
+  //       translate(0.0, 0.0, 6.0, 0.0)),
+  //     rotation(0.7, 0.8));
+  // let s = difference(cs, rss);
+
+  // let tsq = transform(square(), translate(0.5, 0.0, 0.8, 0.0));
+  // let tsq = transform(
+  //   square(),
+  //   vf_translate(affine(0.5, 0.8), affine(0.0, 0.0)));
+
+  // let tsq = transform(
+  //   square(),
+  //   vf_translate(sine(0.0, 1.0, 1.5), affine(0.0, 0.0)));
+  // let s = union(circle(), tsq);
+
+  // let s = smooth_union(circle(), square());
+
   // let s =
-  //   intersection(
-  //     rss,
-  //     cs);
-  render_shp_to(w, h, view, num_frames, s, Rc::new(bevel_shp), r"anim.png");
+  //   transform(
+  //     transform(
+  //       circle(), translate(0.0, 0.0, 0.0, 0.0)),
+  //     grid(1.0, 1.0));
+
+  // let s = rand_clump();
+  let s0 =
+    transform(
+      clump_anim(),
+      pf_grid(1.5, 1.5));
+  let s1 =
+    transform(
+      clump_anim(),
+      pf_grid(2.5, 2.5));
+  let s = interp_anim(2.0, s0, s1);
+  let duration = 4.0;
+  // let a0 = interp_anim(1.0, circle(), square());
+  // let a1 = interp_anim(1.0, square(), circle()); // flower(8));
+  // let s = seq(a0, a1, 1.0);
+
+  render_shp_to(w, h, view, duration, s, Rc::new(bevel_shp), r"anim.png");
 }
 
 fn bevel_shp(shape: Shp, x: f32, y:f32, t: f32) -> Pixel
